@@ -35,12 +35,7 @@ pub fn init(arena: Allocator, io: Io) !void {
         const kind_or_fmt = token[0..delimiter_pos];
         const color_code = token[delimiter_pos + 1 ..];
 
-        const key = if (containsAtLeastScalar2(
-            u8,
-            kind_or_fmt,
-            '*',
-            1,
-        )) kind_or_fmt[1..] else kind_or_fmt;
+        const key = if (containsAtLeastScalar2(u8, kind_or_fmt, '*', 1)) kind_or_fmt[1..] else kind_or_fmt;
         try color_map.put(key, color_code);
     }
 }
