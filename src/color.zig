@@ -26,7 +26,7 @@ fn initConcurrently(arena: Allocator, io: Io) !void {
 
     color_map_buffer = result.stdout;
     color_map = .init(arena);
-    deinit_safe = true;
+    is_deinit_safe = true;
 
     const si = 1 + findScalarPos(u8, color_map_buffer, 0, '\'').?;
     const ei = findScalarPos(u8, color_map_buffer, si, '\'').?;
@@ -41,22 +41,22 @@ fn initConcurrently(arena: Allocator, io: Io) !void {
             else kind_or_fmt;
         try color_map.put(key, color_code);
     }
-    future_done = true;
+    is_future_done = true;
 }
 
 var await_io: Io = undefined;
 var future: Io.Future(@typeInfo(@TypeOf(initConcurrently)).@"fn".return_type.?) = undefined;
-var future_done = false;
+var is_future_done = false;
 
 pub fn init(arena: Allocator, io: Io) !void {
     await_io = io;
     future = try io.concurrent(initConcurrently, .{ arena, io });
 }
 
-var deinit_safe = false;
+var is_deinit_safe = false;
 
 pub fn deinit(arena: Allocator) void {
-    if (deinit_safe) {
+    if (is_deinit_safe) {
         arena.free(color_map_buffer);
         color_map.deinit();
     }
@@ -100,7 +100,7 @@ pub fn getColor(option: Option) ![]const u8 {
         // .unknown
         else => "rs",
     };
-    if (!future_done) try future.await(await_io);
+    if (!is_future_done) try future.await(await_io);
     return color_map.get(key) orelse color_map.get("rs").?;
 }
 
