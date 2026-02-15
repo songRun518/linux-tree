@@ -72,15 +72,12 @@ pub fn getColor(option: Option) ![]const u8 {
         .named_pipe => "pi",
         .unix_domain_socket => "so",
         .door => "do",
-
         .sym_link => if (option.is_bad_symlink) "or" else "ln",
-
         .file => blk: {
             if (option.is_executable) break :blk "ex";
             if (option.extension) |ext| break :blk ext;
             break :blk "fi";
         },
-
         // .event_port
         // .whiteout
         // .unknown
