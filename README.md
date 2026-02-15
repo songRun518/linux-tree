@@ -1,4 +1,4 @@
-Inspired from unix-tree
+Inspired by unix-tree
 
 ## Building from Source
 ```
