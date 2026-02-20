@@ -1,4 +1,4 @@
-Inspired by unix-tree
+Inspired by [unix-tree](https://gitlab.com/OldManProgrammer/unix-tree "gitlab")
 
 ## Building from Source
 ```
