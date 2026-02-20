@@ -12,11 +12,11 @@ const assert = std.debug.assert;
 const root = @import("root");
 const Info = root.Info;
 
-var buffer: []const u8 = undefined;
+var color_map_buffer: []const u8 = undefined;
 /// Its keys and values reference to `buffer`.
 var color_map: StringHashMap([]const u8) = undefined;
 
-pub fn init(arena: Allocator, io: Io) !void {
+fn initConcurrently(arena: Allocator, io: Io) !void {
     const result = try std.process.run(
         arena,
         io,
@@ -24,30 +24,42 @@ pub fn init(arena: Allocator, io: Io) !void {
     );
     defer arena.free(result.stderr);
 
-    buffer = result.stdout;
+    color_map_buffer = result.stdout;
     color_map = .init(arena);
+    is_deinit_safe = true;
 
-    const si = 1 + findScalarPos(u8, buffer, 0, '\'').?;
-    const ei = findScalarPos(u8, buffer, si, '\'').?;
-    var tokens = tokenizeScalar(u8, buffer[si..ei], ':');
+    const si = 1 + findScalarPos(u8, color_map_buffer, 0, '\'').?;
+    const ei = findScalarPos(u8, color_map_buffer, si, '\'').?;
+    var tokens = tokenizeScalar(u8, color_map_buffer[si..ei], ':');
     while (tokens.next()) |token| {
         const delimiter_pos = findScalarPos(u8, token, 0, '=').?;
         const kind_or_fmt = token[0..delimiter_pos];
         const color_code = token[delimiter_pos + 1 ..];
 
-        const key = if (containsAtLeastScalar2(
-            u8,
-            kind_or_fmt,
-            '*',
-            1,
-        )) kind_or_fmt[1..] else kind_or_fmt;
+        const key =
+            if (containsAtLeastScalar2(u8, kind_or_fmt, '*', 1)) kind_or_fmt[1..] //
+            else kind_or_fmt;
         try color_map.put(key, color_code);
     }
+    is_future_done = true;
 }
 
+var await_io: Io = undefined;
+var future: Io.Future(@typeInfo(@TypeOf(initConcurrently)).@"fn".return_type.?) = undefined;
+var is_future_done = false;
+
+pub fn init(arena: Allocator, io: Io) !void {
+    await_io = io;
+    future = try io.concurrent(initConcurrently, .{ arena, io });
+}
+
+var is_deinit_safe = false;
+
 pub fn deinit(arena: Allocator) void {
-    arena.free(buffer);
-    color_map.deinit();
+    if (is_deinit_safe) {
+        arena.free(color_map_buffer);
+        color_map.deinit();
+    }
 }
 
 pub const Option = struct {
@@ -77,20 +89,18 @@ pub fn getColor(option: Option) ![]const u8 {
         .named_pipe => "pi",
         .unix_domain_socket => "so",
         .door => "do",
-
         .sym_link => if (option.is_bad_symlink) "or" else "ln",
-
         .file => blk: {
             if (option.is_executable) break :blk "ex";
             if (option.extension) |ext| break :blk ext;
             break :blk "fi";
         },
-
         // .event_port
         // .whiteout
         // .unknown
         else => "rs",
     };
+    if (!is_future_done) try future.await(await_io);
     return color_map.get(key) orelse color_map.get("rs").?;
 }
 

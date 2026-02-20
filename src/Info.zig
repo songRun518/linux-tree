@@ -35,6 +35,8 @@ fn checkExecutable(permissions: File.Permissions) !bool {
     return try std.fmt.charToDigit(written[written.len - 3], 8) % 2 != 0;
 }
 
+pub const Error = error{FileLostWhileProcessing};
+
 pub fn init(arena: Allocator, io: Io, dir: Dir, entry: Dir.Entry) !Self {
     var self: Self = .{
         .name = try arena.dupeZ(u8, entry.name),
@@ -48,6 +50,7 @@ pub fn init(arena: Allocator, io: Io, dir: Dir, entry: Dir.Entry) !Self {
         .target_path = null,
         .target_is_executable = false,
     };
+    errdefer arena.free(self.name);
 
     self.extension = pathExtension(self.name);
     if (self.extension.?.len == 0) self.extension = null;
@@ -58,6 +61,7 @@ pub fn init(arena: Allocator, io: Io, dir: Dir, entry: Dir.Entry) !Self {
 
             const len = try dir.readLink(io, self.name, &read_link_buffer);
             self.target_path = try arena.dupe(u8, read_link_buffer[0..len]);
+            errdefer arena.free(self.target_path.?);
 
             self.target_is_executable = try checkExecutable(stat.permissions);
         } else |err| switch (err) {
@@ -67,7 +71,10 @@ pub fn init(arena: Allocator, io: Io, dir: Dir, entry: Dir.Entry) !Self {
             else => return err,
         }
     } else if (self.kind == .file) {
-        const stat = try dir.statFile(io, self.name, .{});
+        const stat = dir.statFile(io, self.name, .{}) catch |err| switch (err) {
+            error.FileNotFound => return error.FileLostWhileProcessing,
+            else => return err,
+        };
         self.is_executable = try checkExecutable(stat.permissions);
     }
     return self;

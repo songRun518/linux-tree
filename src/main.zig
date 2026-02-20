@@ -7,7 +7,6 @@ const File = Io.File;
 
 pub const Args = @import("Args.zig");
 pub const Info = @import("Info.zig");
-pub const filter = @import("filter.zig");
 pub const color = @import("color.zig");
 
 pub fn main(init: std.process.Init) !void {
@@ -64,10 +63,10 @@ fn printTree(
     while (try it.next(io)) |entry| {
         if (!args.list_all and entry.name[0] == '.') continue;
 
-        try information.append(
-            arena,
-            try Info.init(arena, io, dir, entry),
-        );
+        if (Info.init(arena, io, dir, entry) catch |err| switch (err) {
+            error.FileLostWhileProcessing => null,
+            else => return err,
+        }) |info| try information.append(arena, info);
     }
     std.mem.sort(Info, information.items, {}, Info.lessThan);
 
