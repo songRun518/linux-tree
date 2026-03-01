@@ -110,7 +110,7 @@ pub fn setColor(stdout_writer: *Io.Writer, option: Option) !void {
 }
 
 /// Asserts `kind` is not sym_link or file.
-pub fn setColorSimply(stdout_writer: *Io.Writer, kind: File.Kind) !void {
+pub fn setColorKind(stdout_writer: *Io.Writer, kind: File.Kind) !void {
     assert(kind != .sym_link and kind != .file);
     var option: Option = undefined;
     option.kind = kind;

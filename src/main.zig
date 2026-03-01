@@ -33,7 +33,7 @@ pub fn main(init: std.process.Init) !void {
     defer cwd.close(io);
 
     for (args.dir_paths) |dir_path| {
-        try color.setColorSimply(stdout_writer, .directory);
+        try color.setColorKind(stdout_writer, .directory);
         try stdout_writer.print("{s}\n", .{dir_path});
         try color.resetColor(stdout_writer);
 
