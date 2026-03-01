@@ -1,7 +1,7 @@
 .{
     .name = .linux_tree,
-    .version = "0.1.2",
-    .minimum_zig_version = "0.16.0-dev.2565+684032671",
+    .version = "0.2.0",
+    .minimum_zig_version = "0.16.0-dev.2676+4e2cec265",
     .paths = .{
         "src",
         "build.zig",
