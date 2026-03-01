@@ -108,19 +108,24 @@ fn printTree(
 
 fn printInfo(stdout_writer: *Io.Writer, info: Info) !void {
     try color.setColor(stdout_writer, .fromInfo(info));
-    try stdout_writer.print("{s}", .{info.name});
+    try stdout_writer.writeAll(info.name);
     try color.resetColor(stdout_writer);
 
     if (info.kind == .sym_link and !info.is_bad_symlink) {
-        try stdout_writer.print(" -> ", .{});
+        try stdout_writer.writeAll(" -> ");
 
+        if (std.fs.path.dirname(info.target_path.?)) |target_dir_path| {
+            try color.setColorKind(stdout_writer, .directory);
+            try stdout_writer.print("{s}/", .{target_dir_path});
+        }
         try color.setColor(stdout_writer, .{
             .kind = info.target_kind.?,
             .is_bad_symlink = info.is_bad_symlink,
             .is_executable = info.target_is_executable,
             .extension = undefined,
         });
-        try stdout_writer.print("{s}", .{info.target_path.?});
+
+        try stdout_writer.writeAll(std.fs.path.basename(info.target_path.?));
         try color.resetColor(stdout_writer);
     }
 }
