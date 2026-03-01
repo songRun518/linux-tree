@@ -16,16 +16,16 @@ var color_map_buffer: []const u8 = undefined;
 /// Its keys and values reference to `buffer`.
 var color_map: StringHashMap([]const u8) = undefined;
 
-fn initConcurrently(arena: Allocator, io: Io) !void {
+fn initConcurrently(allocator: Allocator, io: Io) !void {
     const result = try std.process.run(
-        arena,
+        allocator,
         io,
         .{ .argv = &.{"dircolors"} },
     );
-    defer arena.free(result.stderr);
+    defer allocator.free(result.stderr);
 
     color_map_buffer = result.stdout;
-    color_map = .init(arena);
+    color_map = .init(allocator);
     is_deinit_safe = true;
 
     const si = 1 + findScalarPos(u8, color_map_buffer, 0, '\'').?;
@@ -48,16 +48,16 @@ var await_io: Io = undefined;
 var future: Io.Future(@typeInfo(@TypeOf(initConcurrently)).@"fn".return_type.?) = undefined;
 var is_future_done = false;
 
-pub fn init(arena: Allocator, io: Io) !void {
+pub fn init(allocator: Allocator, io: Io) !void {
     await_io = io;
-    future = try io.concurrent(initConcurrently, .{ arena, io });
+    future = try io.concurrent(initConcurrently, .{ allocator, io });
 }
 
 var is_deinit_safe = false;
 
-pub fn deinit(arena: Allocator) void {
+pub fn deinit(allocator: Allocator) void {
     if (is_deinit_safe) {
-        arena.free(color_map_buffer);
+        allocator.free(color_map_buffer);
         color_map.deinit();
     }
 }

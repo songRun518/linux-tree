@@ -32,14 +32,14 @@ const help =
     \\  -L [level]      Descend only level directories deep
 ;
 
-pub fn deinit(self: Self, arena: Allocator) void {
-    arena.free(self.dir_paths);
+pub fn deinit(self: Self, allocator: Allocator) void {
+    allocator.free(self.dir_paths);
 }
 
-pub fn parse(arena: Allocator, args: std.process.Args) !Self {
+pub fn parse(allocator: Allocator, args: std.process.Args) !Self {
     var self: Self = .{};
     var dir_paths: std.ArrayList([]const u8) = .empty;
-    errdefer dir_paths.deinit(arena);
+    errdefer dir_paths.deinit(allocator);
 
     var it = args.iterate();
     defer it.deinit();
@@ -48,7 +48,7 @@ pub fn parse(arena: Allocator, args: std.process.Args) !Self {
     var all_positional = false;
     while (it.next()) |arg| {
         if (all_positional) {
-            try dir_paths.append(arena, arg);
+            try dir_paths.append(allocator, arg);
             continue;
         }
 
@@ -59,12 +59,12 @@ pub fn parse(arena: Allocator, args: std.process.Args) !Self {
         } else if (startsWith(u8, arg, "-")) {
             try parseShort(arg[1..], &it, &self);
         } else {
-            try dir_paths.append(arena, arg);
+            try dir_paths.append(allocator, arg);
         }
     }
 
-    if (dir_paths.items.len == 0) try dir_paths.append(arena, ".");
-    self.dir_paths = try dir_paths.toOwnedSlice(arena);
+    if (dir_paths.items.len == 0) try dir_paths.append(allocator, ".");
+    self.dir_paths = try dir_paths.toOwnedSlice(allocator);
     return self;
 }
 

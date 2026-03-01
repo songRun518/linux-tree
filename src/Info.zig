@@ -37,9 +37,9 @@ fn checkExecutable(permissions: File.Permissions) !bool {
 
 pub const Error = error{FileLostWhileProcessing};
 
-pub fn init(arena: Allocator, io: Io, dir: Dir, entry: Dir.Entry) !Self {
+pub fn init(allocator: Allocator, io: Io, dir: Dir, entry: Dir.Entry) !Self {
     var self: Self = .{
-        .name = try arena.dupeZ(u8, entry.name),
+        .name = try allocator.dupeZ(u8, entry.name),
         .extension = null,
 
         .kind = entry.kind,
@@ -50,7 +50,7 @@ pub fn init(arena: Allocator, io: Io, dir: Dir, entry: Dir.Entry) !Self {
         .target_path = null,
         .target_is_executable = false,
     };
-    errdefer arena.free(self.name);
+    errdefer allocator.free(self.name);
 
     self.extension = pathExtension(self.name);
     if (self.extension.?.len == 0) self.extension = null;
@@ -60,8 +60,8 @@ pub fn init(arena: Allocator, io: Io, dir: Dir, entry: Dir.Entry) !Self {
             self.target_kind = stat.kind;
 
             const len = try dir.readLink(io, self.name, &read_link_buffer);
-            self.target_path = try arena.dupe(u8, read_link_buffer[0..len]);
-            errdefer arena.free(self.target_path.?);
+            self.target_path = try allocator.dupe(u8, read_link_buffer[0..len]);
+            errdefer allocator.free(self.target_path.?);
 
             self.target_is_executable = try checkExecutable(stat.permissions);
         } else |err| switch (err) {
@@ -80,7 +80,7 @@ pub fn init(arena: Allocator, io: Io, dir: Dir, entry: Dir.Entry) !Self {
     return self;
 }
 
-pub fn deinit(self: Self, arena: Allocator) void {
-    arena.free(self.name);
-    if (self.target_path) |p| arena.free(p);
+pub fn deinit(self: Self, allocator: Allocator) void {
+    allocator.free(self.name);
+    if (self.target_path) |p| allocator.free(p);
 }
