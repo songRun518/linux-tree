@@ -107,8 +107,12 @@ pub fn set(stdout_writer: *Io.Writer, option: Option) !void {
 
 /// Assume `kind` is not sym_link or file.
 pub fn setByKind(stdout_writer: *Io.Writer, kind: File.Kind) !void {
-    var option: Option = undefined;
-    option.kind = kind;
+    const option: Option = .{
+        .kind = kind,
+        .is_bad_link = false,
+        .is_executable = false,
+        .extension = null,
+    };
     const color_code = try get(option);
     try stdout_writer.print("\x1b[{s}m", .{color_code});
 }
