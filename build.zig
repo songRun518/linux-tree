@@ -14,11 +14,11 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(exe);
 
-    const build_info = BuildInfo.parse(b.allocator) catch unreachable;
-    defer build_info.deinit(b.allocator);
-    const options = b.addOptions();
-    options.addOption(BuildInfo, "build_info", build_info);
-    exe.root_module.addOptions("options", options);
+    exe.root_module.addAnonymousImport("build_info", .{
+        .root_source_file = b.path("build.zig.zon"),
+        .target = target,
+        .optimize = optimize,
+    });
 
     const run_exe = b.addRunArtifact(exe);
     run_exe.step.dependOn(b.getInstallStep());
@@ -26,23 +26,3 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Run the executable");
     run_step.dependOn(&run_exe.step);
 }
-
-const BuildInfo = struct {
-    version: []const u8,
-
-    const zon_slice: [:0]const u8 = @embedFile("build.zig.zon");
-
-    fn parse(allocator: std.mem.Allocator) !@This() {
-        return try std.zon.parse.fromSliceAlloc(
-            @This(),
-            allocator,
-            zon_slice,
-            null,
-            .{ .ignore_unknown_fields = true },
-        );
-    }
-
-    fn deinit(self: @This(), allocator: std.mem.Allocator) void {
-        allocator.free(self.version);
-    }
-};

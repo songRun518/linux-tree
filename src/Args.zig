@@ -18,7 +18,7 @@ pub const Error = error{
     UnknownOption,
 };
 
-const version = @import("options").build_info.version;
+const version: []const u8 = @import("build_info").version;
 const help =
     \\Usage: tree [options] [--] [dirs ...]
     \\
