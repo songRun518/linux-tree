@@ -33,9 +33,9 @@ pub fn main(init: std.process.Init) !void {
     defer cwd.close(io);
 
     for (args.dir_paths) |dir_path| {
-        try color.setColorKind(stdout_writer, .directory);
+        try color.setByKind(stdout_writer, .directory);
         try stdout_writer.print("{s}\n", .{dir_path});
-        try color.resetColor(stdout_writer);
+        try color.reset(stdout_writer);
 
         const dir = try cwd.openDir(io, dir_path, .{ .iterate = true });
         defer dir.close(io);
@@ -107,18 +107,18 @@ fn printTree(
 }
 
 fn printInfo(stdout_writer: *Io.Writer, info: Info) !void {
-    try color.setColor(stdout_writer, .fromInfo(info));
+    try color.set(stdout_writer, .fromInfo(info));
     try stdout_writer.writeAll(info.name);
-    try color.resetColor(stdout_writer);
+    try color.reset(stdout_writer);
 
     if (info.kind == .sym_link and !info.is_bad_link) {
         try stdout_writer.writeAll(" -> ");
 
         if (std.fs.path.dirname(info.target_path.?)) |target_dir_path| {
-            try color.setColorKind(stdout_writer, .directory);
+            try color.setByKind(stdout_writer, .directory);
             try stdout_writer.print("{s}/", .{target_dir_path});
         }
-        try color.setColor(stdout_writer, .{
+        try color.set(stdout_writer, .{
             .kind = info.target_kind.?,
             .is_bad_link = info.is_bad_link,
             .is_executable = info.target_is_executable,
@@ -126,6 +126,6 @@ fn printInfo(stdout_writer: *Io.Writer, info: Info) !void {
         });
 
         try stdout_writer.writeAll(std.fs.path.basename(info.target_path.?));
-        try color.resetColor(stdout_writer);
+        try color.reset(stdout_writer);
     }
 }

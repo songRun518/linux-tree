@@ -4,10 +4,8 @@ const Io = std.Io;
 const File = Io.File;
 const findScalarPos = std.mem.findScalarPos;
 const tokenizeScalar = std.mem.tokenizeScalar;
-const eql = std.mem.eql;
 const containsAtLeastScalar2 = std.mem.containsAtLeastScalar2;
 const StringHashMap = std.StringHashMap;
-const assert = std.debug.assert;
 
 const root = @import("root");
 const Info = root.Info;
@@ -81,7 +79,7 @@ pub const Option = struct {
 /// Assumes `permissions` is not null when `kind` is file.
 ///
 /// `format` is like ".xxx".
-pub fn getColor(option: Option) ![]const u8 {
+pub fn get(option: Option) ![]const u8 {
     const key = switch (option.kind) {
         .block_device => "bd",
         .character_device => "cd",
@@ -104,20 +102,19 @@ pub fn getColor(option: Option) ![]const u8 {
     return color_map.get(key) orelse color_map.get("rs").?;
 }
 
-pub fn setColor(stdout_writer: *Io.Writer, option: Option) !void {
-    const color_code = try getColor(option);
+pub fn set(stdout_writer: *Io.Writer, option: Option) !void {
+    const color_code = try get(option);
     try stdout_writer.print("\x1b[{s}m", .{color_code});
 }
 
-/// Asserts `kind` is not sym_link or file.
-pub fn setColorKind(stdout_writer: *Io.Writer, kind: File.Kind) !void {
-    assert(kind != .sym_link and kind != .file);
+/// Assume `kind` is not sym_link or file.
+pub fn setByKind(stdout_writer: *Io.Writer, kind: File.Kind) !void {
     var option: Option = undefined;
     option.kind = kind;
-    const color_code = try getColor(option);
+    const color_code = try get(option);
     try stdout_writer.print("\x1b[{s}m", .{color_code});
 }
 
-pub fn resetColor(stdout_writer: *Io.Writer) !void {
+pub fn reset(stdout_writer: *Io.Writer) !void {
     try stdout_writer.writeAll("\x1b[0m");
 }
