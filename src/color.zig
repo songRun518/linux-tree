@@ -64,14 +64,14 @@ pub fn deinit(allocator: Allocator) void {
 
 pub const Option = struct {
     kind: File.Kind,
-    is_bad_symlink: bool,
+    is_bad_link: bool,
     is_executable: bool,
     extension: ?[]const u8,
 
     pub fn fromInfo(info: Info) @This() {
         return .{
             .kind = info.kind,
-            .is_bad_symlink = info.is_bad_symlink,
+            .is_bad_link = info.is_bad_link,
             .is_executable = info.is_executable,
             .extension = info.extension,
         };
@@ -89,7 +89,7 @@ pub fn getColor(option: Option) ![]const u8 {
         .named_pipe => "pi",
         .unix_domain_socket => "so",
         .door => "do",
-        .sym_link => if (option.is_bad_symlink) "or" else "ln",
+        .sym_link => if (option.is_bad_link) "or" else "ln",
         .file => blk: {
             if (option.is_executable) break :blk "ex";
             if (option.extension) |ext| break :blk ext;

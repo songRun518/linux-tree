@@ -14,7 +14,7 @@ extension: ?[]const u8,
 /// Does not follow the symlink.
 kind: File.Kind,
 /// Does not follow the symlink.
-is_bad_symlink: bool,
+is_bad_link: bool,
 /// Does not follows the symlink.
 is_executable: bool,
 
@@ -43,7 +43,7 @@ pub fn init(allocator: Allocator, io: Io, dir: Dir, entry: Dir.Entry) !Self {
         .extension = null,
 
         .kind = entry.kind,
-        .is_bad_symlink = false,
+        .is_bad_link = false,
         .is_executable = false,
 
         .target_kind = null,
@@ -66,7 +66,7 @@ pub fn init(allocator: Allocator, io: Io, dir: Dir, entry: Dir.Entry) !Self {
             self.target_is_executable = try checkExecutable(stat.permissions);
         } else |err| switch (err) {
             error.FileNotFound => {
-                self.is_bad_symlink = true;
+                self.is_bad_link = true;
             },
             else => return err,
         }

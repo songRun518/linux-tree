@@ -111,7 +111,7 @@ fn printInfo(stdout_writer: *Io.Writer, info: Info) !void {
     try stdout_writer.writeAll(info.name);
     try color.resetColor(stdout_writer);
 
-    if (info.kind == .sym_link and !info.is_bad_symlink) {
+    if (info.kind == .sym_link and !info.is_bad_link) {
         try stdout_writer.writeAll(" -> ");
 
         if (std.fs.path.dirname(info.target_path.?)) |target_dir_path| {
@@ -120,7 +120,7 @@ fn printInfo(stdout_writer: *Io.Writer, info: Info) !void {
         }
         try color.setColor(stdout_writer, .{
             .kind = info.target_kind.?,
-            .is_bad_symlink = info.is_bad_symlink,
+            .is_bad_link = info.is_bad_link,
             .is_executable = info.target_is_executable,
             .extension = undefined,
         });
