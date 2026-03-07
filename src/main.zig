@@ -39,20 +39,22 @@ pub fn main(init: std.process.Init) !void {
 
         const dir = try cwd.openDir(io, dir_path, .{ .iterate = true });
         defer dir.close(io);
-        try printTree(allocator, io, dir, &args, &.{}, stdout_writer, 1);
+        try printTree(allocator, io, dir, &args, stdout_writer, 1);
     }
     try stdout_file_writer.flush();
 }
+
+var prev_branch_buffer: [std.fs.max_path_bytes]u21 = undefined;
 
 fn printTree(
     allocator: Allocator,
     io: Io,
     dir: Dir,
     args: *const Args,
-    prev_chars: []const u21,
     stdout_writer: *Io.Writer,
     level: u64,
 ) !void {
+    const prev_branch_buffer_index = level - 1; // It means index to modify.
     var information: std.ArrayList(Info) = .empty;
     defer {
         for (information.items) |i| i.deinit(allocator);
@@ -70,8 +72,8 @@ fn printTree(
     std.mem.sort(Info, information.items, {}, Info.lessThan);
 
     for (information.items, 0..) |info, idx| {
-        for (prev_chars) |char| {
-            try stdout_writer.print("{u}{1c}{1c}{1c}", .{ char, ' ' });
+        for (0..prev_branch_buffer_index) |index| {
+            try stdout_writer.print("{u}{1c}{1c}{1c}", .{ prev_branch_buffer[index], ' ' });
         }
         try stdout_writer.print(
             "{u}{1u}{1u} ",
@@ -88,17 +90,13 @@ fn printTree(
             );
             defer new_dir.close(io);
 
-            const new_prev_chars = try allocator.alloc(u21, prev_chars.len + 1);
-            defer allocator.free(new_prev_chars);
-            @memcpy(new_prev_chars[0..prev_chars.len], prev_chars);
-            new_prev_chars[new_prev_chars.len - 1] = if (idx == information.items.len - 1) ' ' else '│';
+            prev_branch_buffer[prev_branch_buffer_index] = if (idx == information.items.len - 1) ' ' else '│';
 
             try printTree(
                 allocator,
                 io,
                 new_dir,
                 args,
-                new_prev_chars,
                 stdout_writer,
                 level + 1,
             );
