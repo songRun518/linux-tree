@@ -77,8 +77,6 @@ pub const Option = struct {
 };
 
 /// Assumes `permissions` is not null when `kind` is file.
-///
-/// `format` is like ".xxx".
 pub fn get(option: Option) ![]const u8 {
     const key = switch (option.kind) {
         .block_device => "bd",
