@@ -107,7 +107,7 @@ fn printTree(
 }
 
 fn printInfo(stdout_writer: *Io.Writer, info: Info) !void {
-    try color.set(stdout_writer, .fromInfo(info));
+    try color.set(stdout_writer, info);
     try stdout_writer.writeAll(info.name);
     try color.reset(stdout_writer);
 
@@ -122,7 +122,11 @@ fn printInfo(stdout_writer: *Io.Writer, info: Info) !void {
             .kind = info.target_kind.?,
             .is_bad_link = info.is_bad_link,
             .is_executable = info.target_is_executable,
-            .extension = undefined,
+
+            .name = "",
+            .target_kind = null,
+            .target_path = null,
+            .target_is_executable = false,
         });
 
         try stdout_writer.writeAll(std.fs.path.basename(info.target_path.?));

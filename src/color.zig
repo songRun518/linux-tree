@@ -60,35 +60,22 @@ pub fn deinit(allocator: Allocator) void {
     }
 }
 
-pub const Option = struct {
-    kind: File.Kind,
-    is_bad_link: bool,
-    is_executable: bool,
-    extension: ?[]const u8,
-
-    pub fn fromInfo(info: Info) @This() {
-        return .{
-            .kind = info.kind,
-            .is_bad_link = info.is_bad_link,
-            .is_executable = info.is_executable,
-            .extension = info.extension,
-        };
-    }
-};
-
 /// Assumes `permissions` is not null when `kind` is file.
-pub fn get(option: Option) ![]const u8 {
-    const key = switch (option.kind) {
+pub fn get(info: Info) ![]const u8 {
+    const key = switch (info.kind) {
         .block_device => "bd",
         .character_device => "cd",
         .directory => "di",
         .named_pipe => "pi",
         .unix_domain_socket => "so",
         .door => "do",
-        .sym_link => if (option.is_bad_link) "or" else "ln",
+        .sym_link => if (info.is_bad_link) "or" else "ln",
         .file => blk: {
-            if (option.is_executable) break :blk "ex";
-            if (option.extension) |ext| break :blk ext;
+            if (info.is_executable) break :blk "ex";
+
+            const ext = std.fs.path.extension(info.name);
+            if (ext.len > 0) break :blk ext;
+
             break :blk "fi";
         },
         // .event_port
@@ -100,20 +87,24 @@ pub fn get(option: Option) ![]const u8 {
     return color_map.get(key) orelse color_map.get("rs").?;
 }
 
-pub fn set(stdout_writer: *Io.Writer, option: Option) !void {
+pub fn set(stdout_writer: *Io.Writer, option: Info) !void {
     const color_code = try get(option);
     try stdout_writer.print("\x1b[{s}m", .{color_code});
 }
 
 /// Assume `kind` is not sym_link or file.
 pub fn setByKind(stdout_writer: *Io.Writer, kind: File.Kind) !void {
-    const option: Option = .{
+    const info: Info = .{
         .kind = kind,
+
+        .name = "",
         .is_bad_link = false,
         .is_executable = false,
-        .extension = null,
+        .target_is_executable = false,
+        .target_kind = null,
+        .target_path = null,
     };
-    const color_code = try get(option);
+    const color_code = try get(info);
     try stdout_writer.print("\x1b[{s}m", .{color_code});
 }
 

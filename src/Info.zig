@@ -5,11 +5,8 @@ const Allocator = std.mem.Allocator;
 const Io = std.Io;
 const Dir = Io.Dir;
 const File = Io.File;
-const pathExtension = std.fs.path.extension;
 
 name: [:0]const u8,
-/// References to `name`.
-extension: ?[]const u8,
 
 /// Does not follow the symlink.
 kind: File.Kind,
@@ -40,7 +37,6 @@ pub const Error = error{FileLostWhileProcessing};
 pub fn init(allocator: Allocator, io: Io, dir: Dir, entry: Dir.Entry) !Self {
     var self: Self = .{
         .name = try allocator.dupeZ(u8, entry.name),
-        .extension = null,
 
         .kind = entry.kind,
         .is_bad_link = false,
@@ -51,9 +47,6 @@ pub fn init(allocator: Allocator, io: Io, dir: Dir, entry: Dir.Entry) !Self {
         .target_is_executable = false,
     };
     errdefer allocator.free(self.name);
-
-    self.extension = pathExtension(self.name);
-    if (self.extension.?.len == 0) self.extension = null;
 
     if (self.kind == .sym_link) {
         if (dir.statFile(io, self.name, .{})) |stat| {
