@@ -21,7 +21,7 @@ target_path: ?[]const u8,
 target_is_executable: bool,
 
 pub fn lessThan(_: void, a: Self, b: Self) bool {
-    return a.name[0] < b.name[0];
+    return std.mem.lessThan(u8, a.name, b.name);
 }
 
 var read_link_buffer: [Dir.max_path_bytes]u8 = undefined;
