@@ -4,6 +4,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     std.debug.assert(target.result.os.tag == .linux);
     const optimize = b.standardOptimizeOption(.{});
+    const strip = b.option(bool, "strip", "Strip all symbols");
 
     const exe = b.addExecutable(.{
         .name = "tree",
@@ -11,6 +12,7 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/main.zig"),
             .target = target,
             .optimize = optimize,
+            .strip = strip,
         }),
     });
     b.installArtifact(exe);
@@ -19,6 +21,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("build.zig.zon"),
         .target = target,
         .optimize = optimize,
+        .strip = strip,
     });
 
     const run_exe = b.addRunArtifact(exe);
