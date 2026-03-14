@@ -2,6 +2,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
 const File = Io.File;
+const path = Io.Dir.path;
 const findScalarPos = std.mem.findScalarPos;
 const tokenizeScalar = std.mem.tokenizeScalar;
 const containsAtLeastScalar2 = std.mem.containsAtLeastScalar2;
@@ -69,23 +70,38 @@ pub fn deinit() void {
     color_map.deinit();
 }
 
-/// Assumes `permissions` is not null when `kind` is file.
-pub fn get(info: Info) ![]const u8 {
-    return switch (info.kind) {
+pub const Option = struct {
+    name: []const u8,
+    kind: File.Kind,
+    is_executable: bool,
+    is_bad_link: bool,
+
+    pub fn fromInfo(i: Info) @This() {
+        return .{
+            .name = i.name,
+            .kind = i.kind,
+            .is_executable = i.is_executable,
+            .is_bad_link = i.is_bad_link,
+        };
+    }
+};
+
+pub fn get(opt: Option) ![]const u8 {
+    return switch (opt.kind) {
         .block_device => yellow,
         .character_device => yellow,
         .directory => comptime compose(bold, blue),
         .named_pipe => yellow,
         .unix_domain_socket => magenta,
         .door => magenta,
-        .sym_link => if (info.is_bad_link) red else comptime compose(
+        .sym_link => if (opt.is_bad_link) red else comptime compose(
             bold,
             cyan,
         ),
         .file => f: {
-            if (info.is_executable) break :f comptime compose(bold, green);
+            if (opt.is_executable) break :f comptime compose(bold, green);
 
-            break :f color_map.get(std.fs.path.extension(info.name)) orelse reset__;
+            break :f color_map.get(path.extension(opt.name)) orelse reset__;
         },
         // .event_port
         // .whiteout
@@ -94,23 +110,20 @@ pub fn get(info: Info) ![]const u8 {
     };
 }
 
-pub fn set(w: *Io.Writer, option: Info) !void {
-    try w.print("\x1b[{s}m", .{try get(option)});
+pub fn set(w: *Io.Writer, opt: Option) !void {
+    try w.print("\x1b[{s}m", .{try get(opt)});
 }
 
 /// Assume `kind` is not sym_link or file.
 pub fn setByKind(w: *Io.Writer, kind: File.Kind) !void {
-    const info: Info = .{
+    const opt: Option = .{
         .kind = kind,
 
         .name = "",
-        .is_bad_link = false,
         .is_executable = false,
-        .target_is_executable = false,
-        .target_kind = null,
-        .target_path = null,
+        .is_bad_link = false,
     };
-    try w.print("\x1b[{s}m", .{try get(info)});
+    try w.print("\x1b[{s}m", .{try get(opt)});
 }
 
 pub fn reset(w: *Io.Writer) !void {
