@@ -2,6 +2,7 @@ const std = @import("std");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
+    std.debug.assert(target.result.os.tag == .linux);
     const optimize = b.standardOptimizeOption(.{});
 
     const exe = b.addExecutable(.{
@@ -14,7 +15,7 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(exe);
 
-    exe.root_module.addAnonymousImport("build_info", .{
+    exe.root_module.addAnonymousImport("bzz", .{
         .root_source_file = b.path("build.zig.zon"),
         .target = target,
         .optimize = optimize,
