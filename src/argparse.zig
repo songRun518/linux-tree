@@ -11,7 +11,7 @@ pub const Error = error{
     Exit,
     MissingValue,
     UnknownOption,
-};
+} || Allocator.Error || Io.Writer.Error || std.fmt.ParseIntError;
 
 const version: []const u8 = @import("bzz").version;
 const help =
@@ -26,7 +26,7 @@ const help =
     \\  -L [level]      Descend only level directories deep
 ;
 
-pub fn x(allocator: Allocator, args: std.process.Args, w: *Io.Writer) ![]const []const u8 {
+pub fn x(allocator: Allocator, args: std.process.Args, w: *Io.Writer) Error![]const []const u8 {
     var dirs: std.ArrayList([]const u8) = .empty;
     errdefer dirs.deinit(allocator);
 
@@ -56,6 +56,9 @@ pub fn long(ap: []const u8, w: *Io.Writer) !void {
     } else if (eql(u8, ap, "version")) {
         try w.print("{s}\n", .{version});
         return Error.Exit;
+    } else {
+        std.log.err("unknown option: {s}", .{ap});
+        return Error.UnknownOption;
     }
 }
 
@@ -69,10 +72,16 @@ pub fn short(ap: []const u8, it: *std.process.Args.Iterator) !void {
                 const val = if (index < ap.len - 1) val: {
                     finished = true;
                     break :val ap[index + 1 ..];
-                } else it.next() orelse return Error.MissingValue;
+                } else it.next() orelse {
+                    std.log.err("missing value of '{c}'", .{arg});
+                    return Error.MissingValue;
+                };
                 filter.level = try std.fmt.parseInt(u16, val, 10);
             },
-            else => return Error.UnknownOption,
+            else => {
+                std.log.err("unknown option: {c}", .{arg});
+                return Error.UnknownOption;
+            },
         }
         if (finished) break;
     }
