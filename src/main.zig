@@ -56,7 +56,7 @@ pub fn main(init: std.process.Init) !void {
     try fw.flush();
 }
 
-var prev_branch_buffer: [std.fs.max_path_bytes]u21 = undefined;
+var prev_branch_buffer: [Dir.max_path_bytes]u21 = undefined;
 
 fn printTree(
     allocator: Allocator,
