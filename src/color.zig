@@ -10,90 +10,96 @@ const StringHashMap = std.StringHashMap;
 const root = @import("root");
 const Info = root.Info;
 
-var color_map_buffer: []const u8 = undefined;
-/// Its keys and values reference to `buffer`.
+const black = "30";
+const red = "31";
+const green = "32";
+const yellow = "33";
+const blue = "34";
+const magenta = "35";
+const cyan = "36";
+const white = "37";
+const bright_black = "90";
+const bright_red = "91";
+const bright_green = "92";
+const bright_yellow = "93";
+const bright_blue = "94";
+const bright_magenta = "95";
+const bright_cyan = "96";
+const bright_white = "97";
+
+const bold = "1";
+const dim = "2";
+const reset__ = "0";
+
+fn compose(comptime effect: []const u8, comptime color: []const u8) []const u8 {
+    comptime return effect ++ ";" ++ color;
+}
+
 var color_map: StringHashMap([]const u8) = undefined;
 
-fn initConcurrently(allocator: Allocator, io: Io) !void {
-    const result = try std.process.run(
-        allocator,
-        io,
-        .{ .argv = &.{"dircolors"} },
-    );
-    defer allocator.free(result.stderr);
+pub fn init(allocator: Allocator) !void {
+    const media = comptime [_][]const u8{
+        ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".ico",  ".tiff",
+        ".mp3", ".wav", ".flac", ".ogg", ".m4a",  ".aac", ".mid", ".wma",  ".mp4",
+        ".mkv", ".mov", ".webm", ".avi", ".wmv",  ".flv", ".mpg", ".mpeg",
+    };
 
-    color_map_buffer = result.stdout;
+    const archive = comptime [_][]const u8{
+        ".7z", ".xz", ".zip", ".tar", ".gz", ".bz2", ".rar", ".iso", ".lzma", ".cab",
+    };
+
     color_map = .init(allocator);
-    is_deinit_safe = true;
+    errdefer color_map.deinit();
 
-    const si = 1 + findScalarPos(u8, color_map_buffer, 0, '\'').?;
-    const ei = findScalarPos(u8, color_map_buffer, si, '\'').?;
-    var tokens = tokenizeScalar(u8, color_map_buffer[si..ei], ':');
-    while (tokens.next()) |token| {
-        const delimiter_pos = findScalarPos(u8, token, 0, '=').?;
-        const kind_or_fmt = token[0..delimiter_pos];
-        const color_code = token[delimiter_pos + 1 ..];
-
-        const key =
-            if (containsAtLeastScalar2(u8, kind_or_fmt, '*', 1)) kind_or_fmt[1..] //
-            else kind_or_fmt;
-        try color_map.put(key, color_code);
+    for (media) |e| {
+        try color_map.put(
+            e,
+            comptime compose(bold, magenta),
+        );
     }
-    is_future_done = true;
+    for (archive) |e| {
+        try color_map.put(
+            e,
+            comptime compose(bold, yellow),
+        );
+    }
 }
 
-var await_io: Io = undefined;
-var future: Io.Future(@typeInfo(@TypeOf(initConcurrently)).@"fn".return_type.?) = undefined;
-var is_future_done = false;
-
-pub fn init(allocator: Allocator, io: Io) !void {
-    await_io = io;
-    future = try io.concurrent(initConcurrently, .{ allocator, io });
-}
-
-var is_deinit_safe = false;
-
-pub fn deinit(allocator: Allocator) void {
-    if (is_deinit_safe) {
-        allocator.free(color_map_buffer);
-        color_map.deinit();
-    }
+pub fn deinit() void {
+    color_map.deinit();
 }
 
 /// Assumes `permissions` is not null when `kind` is file.
 pub fn get(info: Info) ![]const u8 {
-    const key = switch (info.kind) {
-        .block_device => "bd",
-        .character_device => "cd",
-        .directory => "di",
-        .named_pipe => "pi",
-        .unix_domain_socket => "so",
-        .door => "do",
-        .sym_link => if (info.is_bad_link) "or" else "ln",
-        .file => blk: {
-            if (info.is_executable) break :blk "ex";
+    return switch (info.kind) {
+        .block_device => yellow,
+        .character_device => yellow,
+        .directory => comptime compose(bold, blue),
+        .named_pipe => yellow,
+        .unix_domain_socket => magenta,
+        .door => magenta,
+        .sym_link => if (info.is_bad_link) red else comptime compose(
+            bold,
+            cyan,
+        ),
+        .file => f: {
+            if (info.is_executable) break :f comptime compose(bold, green);
 
-            const ext = std.fs.path.extension(info.name);
-            if (ext.len > 0) break :blk ext;
-
-            break :blk "fi";
+            break :f color_map.get(std.fs.path.extension(info.name)) orelse reset__;
         },
         // .event_port
         // .whiteout
         // .unknown
-        else => "rs",
+        else => reset__,
     };
-    if (!is_future_done) try future.await(await_io);
-    return color_map.get(key) orelse color_map.get("rs").?;
 }
 
-pub fn set(stdout_writer: *Io.Writer, option: Info) !void {
-    const color_code = try get(option);
-    try stdout_writer.print("\x1b[{s}m", .{color_code});
+pub fn set(w: *Io.Writer, option: Info) !void {
+    try w.print("\x1b[{s}m", .{try get(option)});
 }
 
 /// Assume `kind` is not sym_link or file.
-pub fn setByKind(stdout_writer: *Io.Writer, kind: File.Kind) !void {
+pub fn setByKind(w: *Io.Writer, kind: File.Kind) !void {
     const info: Info = .{
         .kind = kind,
 
@@ -104,10 +110,9 @@ pub fn setByKind(stdout_writer: *Io.Writer, kind: File.Kind) !void {
         .target_kind = null,
         .target_path = null,
     };
-    const color_code = try get(info);
-    try stdout_writer.print("\x1b[{s}m", .{color_code});
+    try w.print("\x1b[{s}m", .{try get(info)});
 }
 
-pub fn reset(stdout_writer: *Io.Writer) !void {
-    try stdout_writer.writeAll("\x1b[0m");
+pub fn reset(w: *Io.Writer) !void {
+    try w.writeAll("\x1b[0m");
 }

@@ -34,8 +34,8 @@ pub fn main(init: std.process.Init) !void {
     };
     defer allocator.free(dirpaths);
 
-    try color.init(allocator, io);
-    defer color.deinit(allocator);
+    try color.init(allocator);
+    defer color.deinit();
 
     const cwd = try Dir.cwd().openDir(
         io,
