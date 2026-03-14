@@ -2,6 +2,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
 const Dir = Io.Dir;
+const path = Dir.path;
 const File = Io.File;
 
 pub const argparse = @import("argparse.zig");
@@ -26,7 +27,7 @@ pub fn main(init: std.process.Init) !void {
         init.minimal.args,
         w,
     ) catch |err| switch (err) {
-        argparse.Error.Exit => {
+        error.Exit => {
             try fw.flush();
             return;
         },
@@ -115,29 +116,27 @@ fn printTree(
 }
 
 fn printInfo(w: *Io.Writer, info: Info) !void {
-    try color.set(w, info);
+    try color.set(w, .fromInfo(info));
     try w.writeAll(info.name);
     try color.reset(w);
 
     if (info.kind == .sym_link and !info.is_bad_link) {
+        const target = info.target.?;
+
         try w.writeAll(" -> ");
 
-        if (std.fs.path.dirname(info.target_path.?)) |target_dir_path| {
+        if (path.dirname(target.path)) |t_dirpath| {
             try color.setByKind(w, .directory);
-            try w.print("{s}/", .{target_dir_path});
+            try w.print("{s}/", .{t_dirpath});
         }
         try color.set(w, .{
-            .kind = info.target_kind.?,
-            .is_bad_link = info.is_bad_link,
-            .is_executable = info.target_is_executable,
-
-            .name = "",
-            .target_kind = null,
-            .target_path = null,
-            .target_is_executable = false,
+            .name = path.basename(target.path),
+            .kind = target.kind,
+            .is_executable = target.is_executable,
+            .is_bad_link = false,
         });
 
-        try w.writeAll(std.fs.path.basename(info.target_path.?));
+        try w.writeAll(path.basename(target.path));
         try color.reset(w);
     }
 }
