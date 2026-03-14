@@ -48,27 +48,27 @@ pub fn x(allocator: Allocator, args: std.process.Args, w: *Io.Writer) ![]const [
     return try dirs.toOwnedSlice(allocator);
 }
 
-/// The `argp` doesn't contain "--".
-pub fn long(argp: []const u8, w: *Io.Writer) !void {
-    if (eql(u8, argp, "help")) {
+/// The `ap` doesn't contain "--".
+pub fn long(ap: []const u8, w: *Io.Writer) !void {
+    if (eql(u8, ap, "help")) {
         try w.print("{s}\n", .{help});
         return Error.Exit;
-    } else if (eql(u8, argp, "version")) {
+    } else if (eql(u8, ap, "version")) {
         try w.print("{s}\n", .{version});
         return Error.Exit;
     }
 }
 
-/// The `argp` doesn't contain "-".
-pub fn short(argp: []const u8, it: *std.process.Args.Iterator) !void {
+/// The `ap` doesn't contain "-".
+pub fn short(ap: []const u8, it: *std.process.Args.Iterator) !void {
     var finished = false;
-    for (argp, 0..) |arg, index| {
+    for (ap, 0..) |arg, index| {
         switch (arg) {
             'a' => filter.list_all = true,
             'L' => {
-                const val = if (index < argp.len - 1) val: {
+                const val = if (index < ap.len - 1) val: {
                     finished = true;
-                    break :val argp[index + 1 ..];
+                    break :val ap[index + 1 ..];
                 } else it.next() orelse return Error.MissingValue;
                 filter.level = try std.fmt.parseInt(u16, val, 10);
             },
