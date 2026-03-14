@@ -26,7 +26,7 @@ const help =
     \\  -L [level]      Descend only level directories deep
 ;
 
-pub fn x(allocator: Allocator, args: std.process.Args, w: *Io.Writer) Error![]const []const u8 {
+pub fn perform(allocator: Allocator, args: std.process.Args, w: *Io.Writer) Error![]const []const u8 {
     var dirs: std.ArrayList([]const u8) = .empty;
     errdefer dirs.deinit(allocator);
 

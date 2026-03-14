@@ -22,7 +22,7 @@ pub fn main(init: std.process.Init) !void {
     var fw = File.stdout().writer(io, &stdout_buffer);
     const w = &fw.interface;
 
-    const dirpaths = argparse.x(
+    const dirpaths = argparse.perform(
         allocator,
         init.minimal.args,
         w,
