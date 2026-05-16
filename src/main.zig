@@ -6,8 +6,9 @@ const path = Dir.path;
 const File = Io.File;
 
 pub const argparse = @import("argparse.zig");
-pub const Info = @import("Info.zig");
 pub const color = @import("color.zig");
+pub const Info = @import("Info.zig");
+
 pub const filter = struct {
     pub var list_all = false;
     pub var level: ?u16 = null;

@@ -1,10 +1,10 @@
-const Self = @This();
-
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
 const Dir = Io.Dir;
 const File = Io.File;
+
+const Self = @This();
 
 name: [:0]const u8,
 

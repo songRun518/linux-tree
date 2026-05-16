@@ -3,9 +3,10 @@ const Allocator = std.mem.Allocator;
 const eql = std.mem.eql;
 const startsWith = std.mem.startsWith;
 const Io = std.Io;
-
 const root = @import("root");
 const filter = root.filter;
+
+const version: []const u8 = @import("bzz").version;
 
 pub const Error = error{
     Exit,
@@ -13,13 +14,12 @@ pub const Error = error{
     UnknownOption,
 };
 
-const version: []const u8 = @import("bzz").version;
 const help =
     \\Usage: tree [options] [dirs ...]
     \\
     \\General Options:
-    \\  --version       Print version and exit 
-    \\  --help          Print this help and exit 
+    \\  --version       Print version and exit
+    \\  --help          Print this help and exit
     \\
     \\Listing Options:
     \\  -a              All files are listed

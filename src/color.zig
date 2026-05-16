@@ -7,7 +7,6 @@ const findScalarPos = std.mem.findScalarPos;
 const tokenizeScalar = std.mem.tokenizeScalar;
 const containsAtLeastScalar2 = std.mem.containsAtLeastScalar2;
 const StringHashMap = std.StringHashMap;
-
 const root = @import("root");
 const Info = root.Info;
 
