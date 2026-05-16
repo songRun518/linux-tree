@@ -8,17 +8,18 @@ const File = Io.File;
 
 name: [:0]const u8,
 
-/// Does not follow the symlink.
 kind: File.Kind,
-/// Does not follow the symlink.
-is_bad_link: bool,
-/// Does not follows the symlink.
 is_executable: bool,
+is_bad_link: bool,
+/// Exists if it isn't bad link.
+target: ?Target,
 
-/// Follows the symlink if it is, and target's kind does not follow the symlink.
-target_kind: ?File.Kind,
-target_path: ?[]const u8,
-target_is_executable: bool,
+/// Symlink's target infomation.
+pub const Target = struct {
+    kind: File.Kind,
+    path: []const u8,
+    is_executable: bool,
+};
 
 pub fn lessThan(_: void, a: Self, b: Self) bool {
     return std.mem.lessThan(u8, a.name, b.name);
@@ -39,24 +40,28 @@ pub fn init(allocator: Allocator, io: Io, dir: Dir, entry: Dir.Entry) !Self {
         .name = try allocator.dupeZ(u8, entry.name),
 
         .kind = entry.kind,
-        .is_bad_link = false,
         .is_executable = false,
+        .is_bad_link = false,
 
-        .target_kind = null,
-        .target_path = null,
-        .target_is_executable = false,
+        .target = null,
     };
     errdefer allocator.free(self.name);
 
     if (self.kind == .sym_link) {
         if (dir.statFile(io, self.name, .{})) |stat| {
-            self.target_kind = stat.kind;
+            const t_kind = stat.kind;
 
             const len = try dir.readLink(io, self.name, &read_link_buffer);
-            self.target_path = try allocator.dupe(u8, read_link_buffer[0..len]);
-            errdefer allocator.free(self.target_path.?);
+            const t_path = try allocator.dupe(u8, read_link_buffer[0..len]);
+            errdefer allocator.free(t_path);
 
-            self.target_is_executable = try checkExecutable(stat.permissions);
+            const t_is_executable = try checkExecutable(stat.permissions);
+
+            self.target = .{
+                .kind = t_kind,
+                .path = t_path,
+                .is_executable = t_is_executable,
+            };
         } else |err| switch (err) {
             error.FileNotFound => {
                 self.is_bad_link = true;
@@ -75,5 +80,5 @@ pub fn init(allocator: Allocator, io: Io, dir: Dir, entry: Dir.Entry) !Self {
 
 pub fn deinit(self: Self, allocator: Allocator) void {
     allocator.free(self.name);
-    if (self.target_path) |p| allocator.free(p);
+    if (self.target) |t| allocator.free(t.path);
 }

@@ -2,28 +2,41 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
 const Dir = Io.Dir;
+const path = Dir.path;
 const File = Io.File;
 
-pub const Args = @import("Args.zig");
+pub const argparse = @import("argparse.zig");
 pub const Info = @import("Info.zig");
 pub const color = @import("color.zig");
+pub const filter = struct {
+    pub var list_all = false;
+    pub var level: ?u16 = null;
+};
+
+var stdout_buffer: [Dir.max_path_bytes]u8 = undefined;
 
 pub fn main(init: std.process.Init) !void {
     const allocator = init.gpa;
     const io = init.io;
 
-    var stdout_buffer: [1024]u8 = undefined;
-    var stdout_file_writer = File.stdout().writer(io, &stdout_buffer);
-    const stdout_writer = &stdout_file_writer.interface;
+    var fw = File.stdout().writer(io, &stdout_buffer);
+    const w = &fw.interface;
 
-    const args = Args.parse(allocator, init.minimal.args) catch |err| {
-        if (err == error.Exit) return;
-        return err;
+    const dirpaths = argparse.perform(
+        allocator,
+        init.minimal.args,
+        w,
+    ) catch |err| switch (err) {
+        error.Exit => {
+            try fw.flush();
+            return;
+        },
+        else => return err,
     };
-    defer args.deinit(allocator);
+    defer allocator.free(dirpaths);
 
-    try color.init(allocator, io);
-    defer color.deinit(allocator);
+    try color.init(allocator);
+    defer color.deinit();
 
     const cwd = try Dir.cwd().openDir(
         io,
@@ -32,27 +45,26 @@ pub fn main(init: std.process.Init) !void {
     );
     defer cwd.close(io);
 
-    for (args.dir_paths) |dir_path| {
-        try color.setByKind(stdout_writer, .directory);
-        try stdout_writer.print("{s}\n", .{dir_path});
-        try color.reset(stdout_writer);
+    for (dirpaths) |dirp| {
+        try color.setByKind(w, .directory);
+        try w.print("{s}\n", .{dirp});
+        try color.reset(w);
 
-        const dir = try cwd.openDir(io, dir_path, .{ .iterate = true });
+        const dir = try cwd.openDir(io, dirp, .{ .iterate = true });
         defer dir.close(io);
-        try printTree(allocator, io, dir, &args, stdout_writer, 1);
+        try printTree(allocator, io, dir, 1, w);
     }
-    try stdout_file_writer.flush();
+    try fw.flush();
 }
 
-var prev_branch_buffer: [std.fs.max_path_bytes]u21 = undefined;
+var prev_branch_buffer: [Dir.max_path_bytes]u21 = undefined;
 
 fn printTree(
     allocator: Allocator,
     io: Io,
     dir: Dir,
-    args: *const Args,
-    stdout_writer: *Io.Writer,
     level: u64,
+    w: *Io.Writer,
 ) !void {
     const prev_branch_buffer_index = level - 1; // It means index to modify.
     var information: std.ArrayList(Info) = .empty;
@@ -62,7 +74,7 @@ fn printTree(
     }
     var it = dir.iterateAssumeFirstIteration();
     while (try it.next(io)) |entry| {
-        if (!args.list_all and entry.name[0] == '.') continue;
+        if (!filter.list_all and entry.name[0] == '.') continue;
 
         if (Info.init(allocator, io, dir, entry) catch |err| switch (err) {
             error.FileLostWhileProcessing => null,
@@ -73,16 +85,16 @@ fn printTree(
 
     for (information.items, 0..) |info, idx| {
         for (0..prev_branch_buffer_index) |index| {
-            try stdout_writer.print("{u}{1c}{1c}{1c}", .{ prev_branch_buffer[index], ' ' });
+            try w.print("{u}{1c}{1c}{1c}", .{ prev_branch_buffer[index], ' ' });
         }
-        try stdout_writer.print(
+        try w.print(
             "{u}{1u}{1u} ",
             .{ @as(u21, if (idx == information.items.len - 1) '└' else '├'), '─' },
         );
-        try printInfo(stdout_writer, info);
-        try stdout_writer.printAsciiChar('\n', .{});
+        try printInfo(w, info);
+        try w.printAsciiChar('\n', .{});
 
-        if (level < args.level orelse std.math.maxInt(u64) and info.kind == .directory) {
+        if (level < filter.level orelse std.math.maxInt(u16) and info.kind == .directory) {
             const new_dir = try dir.openDir(
                 io,
                 info.name,
@@ -96,38 +108,35 @@ fn printTree(
                 allocator,
                 io,
                 new_dir,
-                args,
-                stdout_writer,
                 level + 1,
+                w,
             );
         }
     }
 }
 
-fn printInfo(stdout_writer: *Io.Writer, info: Info) !void {
-    try color.set(stdout_writer, info);
-    try stdout_writer.writeAll(info.name);
-    try color.reset(stdout_writer);
+fn printInfo(w: *Io.Writer, info: Info) !void {
+    try color.set(w, .fromInfo(info));
+    try w.writeAll(info.name);
+    try color.reset(w);
 
     if (info.kind == .sym_link and !info.is_bad_link) {
-        try stdout_writer.writeAll(" -> ");
+        const target = info.target.?;
 
-        if (std.fs.path.dirname(info.target_path.?)) |target_dir_path| {
-            try color.setByKind(stdout_writer, .directory);
-            try stdout_writer.print("{s}/", .{target_dir_path});
+        try w.writeAll(" -> ");
+
+        if (path.dirname(target.path)) |t_dirpath| {
+            try color.setByKind(w, .directory);
+            try w.print("{s}/", .{t_dirpath});
         }
-        try color.set(stdout_writer, .{
-            .kind = info.target_kind.?,
-            .is_bad_link = info.is_bad_link,
-            .is_executable = info.target_is_executable,
-
-            .name = "",
-            .target_kind = null,
-            .target_path = null,
-            .target_is_executable = false,
+        try color.set(w, .{
+            .name = path.basename(target.path),
+            .kind = target.kind,
+            .is_executable = target.is_executable,
+            .is_bad_link = false,
         });
 
-        try stdout_writer.writeAll(std.fs.path.basename(info.target_path.?));
-        try color.reset(stdout_writer);
+        try w.writeAll(path.basename(target.path));
+        try color.reset(w);
     }
 }

@@ -2,6 +2,7 @@ const std = @import("std");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
+    std.debug.assert(target.result.os.tag == .linux);
     const optimize = b.standardOptimizeOption(.{});
 
     const exe = b.addExecutable(.{
@@ -12,9 +13,17 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
+    if (optimize != .Debug) {
+        exe.lto = .full;
+        exe.link_function_sections = true;
+        exe.link_data_sections = true;
+        exe.link_gc_sections = true;
+        exe.linkage = .static;
+    }
+
     b.installArtifact(exe);
 
-    exe.root_module.addAnonymousImport("build_info", .{
+    exe.root_module.addAnonymousImport("bzz", .{
         .root_source_file = b.path("build.zig.zon"),
         .target = target,
         .optimize = optimize,
