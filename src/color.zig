@@ -37,7 +37,7 @@ fn compose(comptime effect: []const u8, comptime color: []const u8) []const u8 {
 
 var color_map: StringHashMap([]const u8) = undefined;
 
-pub fn init(allocator: Allocator) !void {
+pub fn init(gpa: Allocator) !void {
     const media = comptime [_][]const u8{
         ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".ico",  ".tiff",
         ".mp3", ".wav", ".flac", ".ogg", ".m4a",  ".aac", ".mid", ".wma",  ".mp4",
@@ -48,7 +48,7 @@ pub fn init(allocator: Allocator) !void {
         ".7z", ".xz", ".zip", ".tar", ".gz", ".bz2", ".rar", ".iso", ".lzma", ".cab",
     };
 
-    color_map = .init(allocator);
+    color_map = .init(gpa);
     errdefer color_map.deinit();
 
     for (media) |e| {

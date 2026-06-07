@@ -6,29 +6,26 @@ const Io = std.Io;
 const root = @import("root");
 const filter = root.filter;
 
-const version: []const u8 = @import("bzz").version;
-
 pub const Error = error{
     Exit,
     MissingValue,
     UnknownOption,
 };
 
-const help =
+const help_msg =
     \\Usage: tree [options] [dirs ...]
     \\
     \\General Options:
-    \\  --version       Print version and exit
-    \\  --help          Print this help and exit
+    \\  -h, --help          Print this help and exit
     \\
     \\Listing Options:
     \\  -a              All files are listed
     \\  -L [level]      Descend only level directories deep
 ;
 
-pub fn perform(allocator: Allocator, args: std.process.Args, w: *Io.Writer) ![]const []const u8 {
+pub fn perform(gpa: Allocator, args: std.process.Args, w: *Io.Writer) ![]const []const u8 {
     var dirs: std.ArrayList([]const u8) = .empty;
-    errdefer dirs.deinit(allocator);
+    errdefer dirs.deinit(gpa);
 
     var it = args.iterate();
     _ = it.skip();
@@ -38,40 +35,38 @@ pub fn perform(allocator: Allocator, args: std.process.Args, w: *Io.Writer) ![]c
         } else if (startsWith(u8, arg, "-")) {
             try short(arg[1..], &it);
         } else {
-            try dirs.append(allocator, arg);
+            try dirs.append(gpa, arg);
         }
     }
 
     if (dirs.items.len == 0) {
-        try dirs.append(allocator, ".");
+        try dirs.append(gpa, ".");
     }
-    return try dirs.toOwnedSlice(allocator);
+    return try dirs.toOwnedSlice(gpa);
 }
 
-/// The `ap` doesn't contain "--".
-pub fn long(ap: []const u8, w: *Io.Writer) !void {
-    if (eql(u8, ap, "help")) {
-        try w.print("{s}\n", .{help});
-        return Error.Exit;
-    } else if (eql(u8, ap, "version")) {
-        try w.print("{s}\n", .{version});
+/// The `s` does not contain "--".
+pub fn long(s: []const u8, w: *Io.Writer) !void {
+    if (eql(u8, s, "help")) {
+        try w.print("{s}\n", .{help_msg});
         return Error.Exit;
     } else {
-        std.log.err("unknown option: {s}", .{ap});
+        std.log.err("unknown option: {s}", .{s});
         return Error.UnknownOption;
     }
 }
 
-/// The `ap` doesn't contain "-".
-pub fn short(ap: []const u8, it: *std.process.Args.Iterator) !void {
+/// The `s` does not contain "-".
+pub fn short(s: []const u8, it: *std.process.Args.Iterator) !void {
     var finished = false;
-    for (ap, 0..) |arg, index| {
+    for (s, 0..) |arg, index| {
         switch (arg) {
+            'h' => return Error.Exit,
             'a' => filter.list_all = true,
             'L' => {
-                const val = if (index < ap.len - 1) val: {
+                const val = if (index < s.len - 1) val: {
                     finished = true;
-                    break :val ap[index + 1 ..];
+                    break :val s[index + 1 ..];
                 } else it.next() orelse {
                     std.log.err("missing value of '{c}'", .{arg});
                     return Error.MissingValue;

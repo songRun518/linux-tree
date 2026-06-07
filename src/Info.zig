@@ -33,11 +33,11 @@ fn checkExecutable(permissions: File.Permissions) !bool {
     return try std.fmt.charToDigit(written[written.len - 3], 8) % 2 != 0;
 }
 
-pub const Error = error{FileLostWhileProcessing};
+pub const Error = error{Ignore};
 
-pub fn init(allocator: Allocator, io: Io, dir: Dir, entry: Dir.Entry) !Self {
+pub fn init(gpa: Allocator, io: Io, dir: Dir, entry: Dir.Entry) !Self {
     var self: Self = .{
-        .name = try allocator.dupeZ(u8, entry.name),
+        .name = try gpa.dupeZ(u8, entry.name),
 
         .kind = entry.kind,
         .is_executable = false,
@@ -45,15 +45,15 @@ pub fn init(allocator: Allocator, io: Io, dir: Dir, entry: Dir.Entry) !Self {
 
         .target = null,
     };
-    errdefer allocator.free(self.name);
+    errdefer gpa.free(self.name);
 
     if (self.kind == .sym_link) {
         if (dir.statFile(io, self.name, .{})) |stat| {
             const t_kind = stat.kind;
 
             const len = try dir.readLink(io, self.name, &read_link_buffer);
-            const t_path = try allocator.dupe(u8, read_link_buffer[0..len]);
-            errdefer allocator.free(t_path);
+            const t_path = try gpa.dupe(u8, read_link_buffer[0..len]);
+            errdefer gpa.free(t_path);
 
             const t_is_executable = try checkExecutable(stat.permissions);
 
@@ -70,7 +70,7 @@ pub fn init(allocator: Allocator, io: Io, dir: Dir, entry: Dir.Entry) !Self {
         }
     } else if (self.kind == .file) {
         const stat = dir.statFile(io, self.name, .{}) catch |err| switch (err) {
-            error.FileNotFound => return error.FileLostWhileProcessing,
+            error.AccessDenied, error.FileNotFound => return error.Ignore,
             else => return err,
         };
         self.is_executable = try checkExecutable(stat.permissions);
@@ -78,7 +78,7 @@ pub fn init(allocator: Allocator, io: Io, dir: Dir, entry: Dir.Entry) !Self {
     return self;
 }
 
-pub fn deinit(self: Self, allocator: Allocator) void {
-    allocator.free(self.name);
-    if (self.target) |t| allocator.free(t.path);
+pub fn deinit(self: Self, gpa: Allocator) void {
+    gpa.free(self.name);
+    if (self.target) |t| gpa.free(t.path);
 }

@@ -2,8 +2,12 @@ const std = @import("std");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
-    std.debug.assert(target.result.os.tag == .linux);
     const optimize = b.standardOptimizeOption(.{});
+
+    if (target.result.os.tag != .linux) {
+        std.log.err("Please compile for linux", .{});
+        return;
+    }
 
     const exe = b.addExecutable(.{
         .name = "tree",
@@ -11,27 +15,21 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/main.zig"),
             .target = target,
             .optimize = optimize,
+            .strip = optimize != .Debug,
+            .omit_frame_pointer = true,
+            .pic = false,
         }),
+        .use_lld = true,
+        .use_llvm = true,
+        .linkage = .static,
     });
     if (optimize != .Debug) {
         exe.lto = .full;
         exe.link_function_sections = true;
         exe.link_data_sections = true;
         exe.link_gc_sections = true;
-        exe.linkage = .static;
+        exe.pie = false;
     }
 
     b.installArtifact(exe);
-
-    exe.root_module.addAnonymousImport("bzz", .{
-        .root_source_file = b.path("build.zig.zon"),
-        .target = target,
-        .optimize = optimize,
-    });
-
-    const run_exe = b.addRunArtifact(exe);
-    run_exe.step.dependOn(b.getInstallStep());
-    if (b.args) |args| run_exe.addArgs(args);
-    const run_step = b.step("run", "Run the executable");
-    run_step.dependOn(&run_exe.step);
 }
