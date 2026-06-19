@@ -37,7 +37,7 @@ pub const Error = error{Ignore};
 
 pub fn init(gpa: Allocator, io: Io, dir: Dir, entry: Dir.Entry) !Self {
     var self: Self = .{
-        .name = try gpa.dupeZ(u8, entry.name),
+        .name = try gpa.dupeSentinel(u8, entry.name, 0),
 
         .kind = entry.kind,
         .is_executable = false,
@@ -63,7 +63,8 @@ pub fn init(gpa: Allocator, io: Io, dir: Dir, entry: Dir.Entry) !Self {
                 .is_executable = t_is_executable,
             };
         } else |err| switch (err) {
-            error.FileNotFound => {
+            // A simple handle strategy.
+            error.SymLinkLoop, error.Unexpected, error.AccessDenied, error.FileNotFound => {
                 self.is_bad_link = true;
             },
             else => return err,

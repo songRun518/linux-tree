@@ -1,10 +1,12 @@
-CMD = zig build -fincremental
+CMD = zig build
 
 dev:
-	$(CMD) -p . --prefix-exe-dir zig-out/dev \
+	$(CMD) --prefix-exe-dir zig-out/dev \
 
 release:
-	$(CMD) -p . --prefix-exe-dir zig-out/release \
-	-Doptimize=ReleaseSafe -Dcpu=native \
+	$(CMD) --prefix-exe-dir zig-out/release \
+	-Doptimize=ReleaseFast -Dcpu=native \
 
-.PHONY: dev release
+all: release dev
+
+.PHONY: dev release all

@@ -5,13 +5,14 @@ const Dir = Io.Dir;
 const path = Dir.path;
 const File = Io.File;
 
-pub const argparse = @import("argparse.zig");
+pub const cli = @import("cli.zig");
 pub const color = @import("color.zig");
 pub const Info = @import("Info.zig");
 
 pub const filter = struct {
     pub var list_all = false;
     pub var level: ?u16 = null;
+    pub var no_color: bool = false;
 };
 
 var stdout_buffer: [Dir.max_path_bytes]u8 = undefined;
@@ -23,12 +24,9 @@ pub fn main(init: std.process.Init) !void {
     var fw = File.stdout().writer(io, &stdout_buffer);
     const w = &fw.interface;
 
-    const dirpaths = argparse.perform(
-        gpa,
-        init.minimal.args,
-        w,
-    ) catch |err| switch (err) {
-        error.Exit => {
+    const dirpaths = cli.handleCli(gpa, init.minimal.args) catch |err| switch (err) {
+        error.ExitHelp => {
+            try w.print("{s}\n", .{cli.help_msg});
             try fw.flush();
             return;
         },
@@ -67,14 +65,17 @@ fn printTree(
     level: u64,
     w: *Io.Writer,
 ) !void {
-    const prev_branch_buffer_index = level - 1; // It means index to modify.
+    const prev_branch_buffer_index = level - 1; // The index to modify.
     var information: std.ArrayList(Info) = .empty;
     defer {
         for (information.items) |i| i.deinit(gpa);
         information.deinit(gpa);
     }
     var it = dir.iterateAssumeFirstIteration();
-    while (try it.next(io)) |entry| {
+    while (it.next(io) catch |err| switch (err) {
+        error.AccessDenied => null,
+        else => return err,
+    }) |entry| {
         if (!filter.list_all and entry.name[0] == '.') continue;
 
         if (Info.init(gpa, io, dir, entry) catch |err| switch (err) {

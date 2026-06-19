@@ -5,10 +5,11 @@ const File = Io.File;
 const path = Io.Dir.path;
 const findScalarPos = std.mem.findScalarPos;
 const tokenizeScalar = std.mem.tokenizeScalar;
-const containsAtLeastScalar2 = std.mem.containsAtLeastScalar2;
 const StringHashMap = std.StringHashMap;
-const root = @import("root");
+
+const root = @import("main.zig");
 const Info = root.Info;
+const filter = root.filter;
 
 const black = "30";
 const red = "31";
@@ -29,7 +30,7 @@ const bright_white = "97";
 
 const bold = "1";
 const dim = "2";
-const reset__ = "0";
+const reset_c = "0";
 
 fn compose(comptime effect: []const u8, comptime color: []const u8) []const u8 {
     comptime return effect ++ ";" ++ color;
@@ -37,27 +38,27 @@ fn compose(comptime effect: []const u8, comptime color: []const u8) []const u8 {
 
 var color_map: StringHashMap([]const u8) = undefined;
 
+const media_ext = [_][]const u8{
+    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".ico",  ".tiff",
+    ".mp3", ".wav", ".flac", ".ogg", ".m4a",  ".aac", ".mid", ".wma",  ".mp4",
+    ".mkv", ".mov", ".webm", ".avi", ".wmv",  ".flv", ".mpg", ".mpeg",
+};
+
+const archive_ext = [_][]const u8{
+    ".7z", ".xz", ".zip", ".tar", ".gz", ".bz2", ".rar", ".iso", ".lzma", ".cab",
+};
+
 pub fn init(gpa: Allocator) !void {
-    const media = comptime [_][]const u8{
-        ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".ico",  ".tiff",
-        ".mp3", ".wav", ".flac", ".ogg", ".m4a",  ".aac", ".mid", ".wma",  ".mp4",
-        ".mkv", ".mov", ".webm", ".avi", ".wmv",  ".flv", ".mpg", ".mpeg",
-    };
-
-    const archive = comptime [_][]const u8{
-        ".7z", ".xz", ".zip", ".tar", ".gz", ".bz2", ".rar", ".iso", ".lzma", ".cab",
-    };
-
     color_map = .init(gpa);
     errdefer color_map.deinit();
 
-    for (media) |e| {
+    for (media_ext) |e| {
         try color_map.put(
             e,
             comptime compose(bold, magenta),
         );
     }
-    for (archive) |e| {
+    for (archive_ext) |e| {
         try color_map.put(
             e,
             comptime compose(bold, yellow),
@@ -100,21 +101,22 @@ pub fn get(opt: Option) ![]const u8 {
         .file => f: {
             if (opt.is_executable) break :f comptime compose(bold, green);
 
-            break :f color_map.get(path.extension(opt.name)) orelse reset__;
+            break :f color_map.get(path.extension(opt.name)) orelse reset_c;
         },
-        // .event_port
-        // .whiteout
-        // .unknown
-        else => reset__,
+        else => reset_c, //.event_port .whiteout .unknown
     };
 }
 
 pub fn set(w: *Io.Writer, opt: Option) !void {
+    if (filter.no_color) return;
+
     try w.print("\x1b[{s}m", .{try get(opt)});
 }
 
 /// Assume `kind` is not sym_link or file.
 pub fn setByKind(w: *Io.Writer, kind: File.Kind) !void {
+    if (filter.no_color) return;
+
     const opt: Option = .{
         .kind = kind,
 
@@ -126,5 +128,7 @@ pub fn setByKind(w: *Io.Writer, kind: File.Kind) !void {
 }
 
 pub fn reset(w: *Io.Writer) !void {
+    if (filter.no_color) return;
+
     try w.writeAll("\x1b[0m");
 }
