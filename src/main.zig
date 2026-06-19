@@ -15,7 +15,7 @@ pub const filter = struct {
     pub var no_color: bool = false;
 };
 
-var stdout_buffer: [Dir.max_path_bytes]u8 = undefined;
+var stdout_buffer: [8 * 1024]u8 = undefined;
 
 pub fn main(init: std.process.Init) !void {
     const gpa = init.gpa;
