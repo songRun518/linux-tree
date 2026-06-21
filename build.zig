@@ -3,7 +3,6 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const is_release = optimize != .Debug;
 
     if (target.result.os.tag != .linux) {
         std.log.err("Please compile for linux", .{});
@@ -17,13 +16,16 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
         }),
-        .use_lld = true,
-        .use_llvm = true,
     });
-    if (is_release) {
+    if (optimize != .Debug) {
+        exe.root_module.omit_frame_pointer = true;
         exe.root_module.strip = true;
         exe.lto = .full;
     }
-
-    b.installArtifact(exe);
+    b.getInstallStep().dependOn(&b.addInstallArtifact(
+        exe,
+        .{ .dest_dir = .{ .override = .{
+            .custom = if (optimize == .Debug) "dev" else "release",
+        } } },
+    ).step);
 }

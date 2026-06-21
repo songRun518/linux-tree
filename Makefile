@@ -1,11 +1,8 @@
-CMD = zig build
-
 dev:
-	$(CMD) --prefix-exe-dir zig-out/dev \
+	zig build \
 
 release:
-	$(CMD) --prefix-exe-dir zig-out/release \
-	-Doptimize=ReleaseFast -Dcpu=native \
+	zig build -Doptimize=ReleaseFast \
 
 all: release dev
 
