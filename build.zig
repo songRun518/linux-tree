@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const exe_name = "tree";
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -10,7 +12,7 @@ pub fn build(b: *std.Build) void {
     }
 
     const exe = b.addExecutable(.{
-        .name = "tree",
+        .name = exe_name,
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/main.zig"),
             .target = target,
@@ -22,10 +24,7 @@ pub fn build(b: *std.Build) void {
         exe.root_module.strip = true;
         exe.lto = .full;
     }
-    b.getInstallStep().dependOn(&b.addInstallArtifact(
-        exe,
-        .{ .dest_dir = .{ .override = .{
-            .custom = if (optimize == .Debug) "dev" else "release",
-        } } },
-    ).step);
+    b.getInstallStep().dependOn(&b.addInstallArtifact(exe, .{
+        .dest_sub_path = if (optimize == .Debug) exe_name ++ "-debug" else exe_name,
+    }).step);
 }
