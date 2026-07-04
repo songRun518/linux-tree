@@ -3,17 +3,17 @@ const Allocator = std.mem.Allocator;
 const eql = std.mem.eql;
 const startsWith = std.mem.startsWith;
 const Io = std.Io;
+const ArgIter = std.process.Args.Iterator;
 
-const root = @import("main.zig");
-const filter = root.filter;
+const filter = @import("main.zig").filter;
+const output = @import("output.zig");
 
 pub const Error = error{
-    ExitHelp,
-    MissingValue,
-    UnknownOption,
-};
+    ExitSuccess,
+    ExitFailure,
+} || Allocator.Error;
 
-pub const help_msg =
+const help_message =
     \\Usage: tree [options] [dirs ...]
     \\
     \\General Options:
@@ -27,9 +27,9 @@ pub const help_msg =
     \\  --no-color          Disable colored output.
 ;
 
-pub fn handleCli(gpa: Allocator, args: std.process.Args) ![]const []const u8 {
-    var dirs: std.ArrayList([]const u8) = .empty;
-    errdefer dirs.deinit(gpa);
+pub fn handleCli(gpa: Allocator, args: std.process.Args) Error![]const []const u8 {
+    var dir_paths: std.ArrayList([]const u8) = .empty;
+    errdefer dir_paths.deinit(gpa);
 
     var it = args.iterate();
     _ = it.skip();
@@ -39,50 +39,57 @@ pub fn handleCli(gpa: Allocator, args: std.process.Args) ![]const []const u8 {
         } else if (startsWith(u8, arg, "-")) {
             try handleShortArg(arg[1..], &it);
         } else {
-            try dirs.append(gpa, arg);
+            try dir_paths.append(gpa, arg);
         }
     }
 
-    if (dirs.items.len == 0) {
-        try dirs.append(gpa, ".");
+    if (dir_paths.items.len == 0) {
+        try dir_paths.append(gpa, ".");
     }
-    return try dirs.toOwnedSlice(gpa);
+    return try dir_paths.toOwnedSlice(gpa);
 }
 
 /// The `s` does not contain "--".
-fn handleLongArg(s: []const u8) !void {
+fn handleLongArg(s: []const u8) Error!void {
     if (eql(u8, s, "help")) {
-        return Error.ExitHelp;
+        output.print("{s}\n", .{help_message});
+        return Error.ExitSuccess;
     } else if (eql(u8, s, "no-color")) {
         filter.no_color = true;
     } else {
-        std.log.err("unknown option: {s}", .{s});
-        return Error.UnknownOption;
+        std.log.err("Unknown option: {s}", .{s});
+        return Error.ExitFailure;
     }
 }
 
 /// The `s` does not contain "-".
-fn handleShortArg(s: []const u8, it: *std.process.Args.Iterator) !void {
-    var finished = false;
+fn handleShortArg(s: []const u8, it: *ArgIter) !void {
     for (s, 0..) |arg, index| {
         switch (arg) {
-            'h' => return Error.ExitHelp,
+            'h' => return Error.ExitSuccess,
             'a' => filter.list_all = true,
             'L' => {
-                const val = if (index < s.len - 1) val: {
-                    finished = true;
-                    break :val s[index + 1 ..];
-                } else it.next() orelse {
-                    std.log.err("missing value of '{c}'", .{arg});
-                    return Error.MissingValue;
+                const lvl_str, const is_done = if (index < s.len - 1)
+                    .{ s[index + 1 ..], true }
+                else
+                    .{ it.next() orelse {
+                        std.log.err("Missing value of '{c}'", .{arg});
+                        return Error.ExitFailure;
+                    }, false };
+                filter.level = std.fmt.parseInt(
+                    u16,
+                    lvl_str,
+                    10,
+                ) catch |err| {
+                    std.log.err("{t} @ parse level of '{s}'", .{ err, lvl_str });
+                    return Error.ExitFailure;
                 };
-                filter.level = try std.fmt.parseInt(u16, val, 10);
+                if (is_done) break;
             },
             else => {
-                std.log.err("unknown option: {c}", .{arg});
-                return Error.UnknownOption;
+                std.log.err("Unknown option: {c}", .{arg});
+                return Error.ExitFailure;
             },
         }
-        if (finished) break;
     }
 }
