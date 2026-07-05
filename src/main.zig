@@ -2,146 +2,134 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
 const Dir = Io.Dir;
-const path = Dir.path;
 const File = Io.File;
+const path = Dir.path;
 
-pub const cli = @import("cli.zig");
-pub const color = @import("color.zig");
-pub const Info = @import("Info.zig");
+const cli = @import("cli.zig");
+const detail = @import("detail.zig");
+const DirIter = @import("DirIter.zig");
+const fatal_fn = @import("fatal_fn.zig");
+const output = @import("output.zig");
 
-pub const filter = struct {
+pub const control = struct {
     pub var list_all = false;
-    pub var level: ?u16 = null;
-    pub var no_color: bool = false;
+    pub var max_level: ?u16 = null;
+    pub var no_color: bool = true;
+    pub var show_size: bool = false;
 };
 
 var stdout_buffer: [8 * 1024]u8 = undefined;
 
-pub fn main(init: std.process.Init) !void {
+pub fn main(init: std.process.Init) !u8 {
     const gpa = init.gpa;
     const io = init.io;
 
-    var fw = File.stdout().writer(io, &stdout_buffer);
-    const w = &fw.interface;
+    output.init(io);
+    defer output.deinit();
 
-    const dirpaths = cli.handleCli(gpa, init.minimal.args) catch |err| switch (err) {
-        error.ExitHelp => {
-            try w.print("{s}\n", .{cli.help_msg});
-            try fw.flush();
-            return;
-        },
-        else => return err,
+    const dir_paths = cli.handleCli(
+        gpa,
+        init.minimal.args,
+    ) catch |err| switch (err) {
+        cli.Error.ExitSuccess => return 0,
+        cli.Error.ExitFailure => return 1,
+        cli.Error.OutOfMemory => fatal_fn.outOfMemery(),
     };
-    defer gpa.free(dirpaths);
+    defer gpa.free(dir_paths);
 
-    try color.init(gpa);
-    defer color.deinit();
-
-    const cwd = try Dir.cwd().openDir(
-        io,
-        ".",
-        .{ .iterate = true },
-    );
-    defer cwd.close(io);
-
-    for (dirpaths) |dirp| {
-        try color.setByKind(w, .directory);
-        try w.print("{s}\n", .{dirp});
-        try color.reset(w);
-
-        const dir = try cwd.openDir(io, dirp, .{ .iterate = true });
+    for (dir_paths) |dir_path| {
+        const dir = Dir.cwd().openDir(
+            io,
+            dir_path,
+            .{ .iterate = true },
+        ) catch |err| {
+            std.log.err("{t} @ open dir '{s}'", .{ err, dir_path });
+            return 1;
+        };
         defer dir.close(io);
-        try printTree(gpa, io, dir, 1, w);
+
+        output.print("{s}\n", .{dir_path});
+
+        try makeTree(gpa, io, dir, 1);
     }
-    try fw.flush();
+
+    return 0;
 }
 
 var prev_branch_buffer: [Dir.max_path_bytes]u21 = undefined;
 
-fn printTree(
+fn makeTree(
     gpa: Allocator,
     io: Io,
-    dir: Dir,
-    level: u64,
-    w: *Io.Writer,
+    dir_or_err: Dir.OpenError!Dir,
+    level: usize,
 ) !void {
-    const prev_branch_buffer_index = level - 1; // The index to modify.
-    var information: std.ArrayList(Info) = .empty;
-    defer {
-        for (information.items) |i| i.deinit(gpa);
-        information.deinit(gpa);
-    }
-    var it = dir.iterateAssumeFirstIteration();
-    while (it.next(io) catch |err| switch (err) {
-        error.AccessDenied => null,
-        else => return err,
-    }) |entry| {
-        if (!filter.list_all and entry.name[0] == '.') continue;
+    const dir = dir_or_err catch |err| {
+        printLastError(err, level);
+        return;
+    };
+    var it = DirIter.init(io, dir);
+    while (true) {
+        const entry = it.next() catch |err| {
+            printLastError(err, level);
+            return;
+        } orelse break;
 
-        if (Info.init(gpa, io, dir, entry) catch |err| switch (err) {
-            error.Ignore => null,
-            else => return err,
-        }) |info| try information.append(gpa, info);
-    }
-    std.mem.sort(Info, information.items, {}, Info.lessThan);
+        const is_last = null == try it.peek();
 
-    for (information.items, 0..) |info, idx| {
-        for (0..prev_branch_buffer_index) |index| {
-            try w.print("{u}{1c}{1c}{1c}", .{ prev_branch_buffer[index], ' ' });
+        for (0..level - 1) |i| {
+            // Prints one branch and three space.
+            output.print("{u}   ", .{prev_branch_buffer[i]});
         }
-        try w.print(
-            "{u}{1u}{1u} ",
-            .{ @as(u21, if (idx == information.items.len - 1) '└' else '├'), '─' },
-        );
-        try printInfo(w, info);
-        try w.printAsciiChar('\n', .{});
+        // Prints four width.
+        output.print("{u}── ", .{@as(u21, if (is_last) '└' else '├')});
+        // Prints details by file kind.
+        printDetail(io, dir, entry);
 
-        if (level < filter.level orelse std.math.maxInt(u16) and info.kind == .directory) deepen: {
-            const new_dir = dir.openDir(
+        const is_in_range = if (control.max_level) |ml| level < ml else true;
+        if (is_in_range and entry.kind == .directory) {
+            const next = dir.openDir(
                 io,
-                info.name,
+                entry.name,
                 .{ .iterate = true, .follow_symlinks = false },
-            ) catch |err| switch (err) {
-                error.AccessDenied => break :deepen,
-                else => return err,
-            };
-            defer new_dir.close(io);
+            );
+            defer if (next) |nd| nd.close(io) else |_| {};
 
-            prev_branch_buffer[prev_branch_buffer_index] = if (idx == information.items.len - 1) ' ' else '│';
+            prev_branch_buffer[level - 1] = if (is_last) ' ' else '│';
 
-            try printTree(
+            try makeTree(
                 gpa,
                 io,
-                new_dir,
+                next,
                 level + 1,
-                w,
             );
         }
     }
 }
 
-fn printInfo(w: *Io.Writer, info: Info) !void {
-    try color.set(w, .fromInfo(info));
-    try w.writeAll(info.name);
-    try color.reset(w);
+fn printLastError(err: anyerror, level: usize) void {
+    for (0..level - 1) |i| {
+        // Prints one branch and three space.
+        output.print("{u}   ", .{prev_branch_buffer[i]});
+    }
+    // Prints four width.
+    output.print("{u}── ", .{@as(u21, '└')});
+    output.print("error: {t}\n", .{err});
+}
 
-    if (info.kind == .sym_link and !info.is_bad_link) {
-        const target = info.target.?;
-
-        try w.writeAll(" -> ");
-
-        if (path.dirname(target.path)) |t_dirpath| {
-            try color.setByKind(w, .directory);
-            try w.print("{s}/", .{t_dirpath});
+fn printDetail(io: Io, dir: Dir, entry: Dir.Entry) void {
+    detail.update(io, dir, entry);
+    if (control.show_size) output.print("[{d}] ", .{detail.size});
+    if (entry.kind == .sym_link) {
+        output.print("{s} -> ", .{entry.name});
+        if (detail.target) |te| {
+            if (te) |t| {
+                output.print("{s}\n", .{t.path});
+            } else |err| {
+                output.print("error: {t}", .{err});
+            }
         }
-        try color.set(w, .{
-            .name = path.basename(target.path),
-            .kind = target.kind,
-            .is_executable = target.is_executable,
-            .is_bad_link = false,
-        });
-
-        try w.writeAll(path.basename(target.path));
-        try color.reset(w);
+    } else {
+        output.print("{s}\n", .{entry.name});
     }
 }

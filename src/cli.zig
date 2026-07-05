@@ -5,7 +5,7 @@ const startsWith = std.mem.startsWith;
 const Io = std.Io;
 const ArgIter = std.process.Args.Iterator;
 
-const filter = @import("main.zig").filter;
+const control = @import("main.zig").control;
 const output = @import("output.zig");
 
 pub const Error = error{
@@ -27,8 +27,8 @@ const help_message =
     \\  --no-color          Disable colored output.
 ;
 
-pub fn handleCli(gpa: Allocator, args: std.process.Args) Error![]const []const u8 {
-    var dir_paths: std.ArrayList([]const u8) = .empty;
+pub fn handleCli(gpa: Allocator, args: std.process.Args) Error![]const [:0]const u8 {
+    var dir_paths: std.ArrayList([:0]const u8) = .empty;
     errdefer dir_paths.deinit(gpa);
 
     var it = args.iterate();
@@ -55,7 +55,7 @@ fn handleLongArg(s: []const u8) Error!void {
         output.print("{s}\n", .{help_message});
         return Error.ExitSuccess;
     } else if (eql(u8, s, "no-color")) {
-        filter.no_color = true;
+        control.no_color = true;
     } else {
         std.log.err("Unknown option: {s}", .{s});
         return Error.ExitFailure;
@@ -67,7 +67,7 @@ fn handleShortArg(s: []const u8, it: *ArgIter) !void {
     for (s, 0..) |arg, index| {
         switch (arg) {
             'h' => return Error.ExitSuccess,
-            'a' => filter.list_all = true,
+            'a' => control.list_all = true,
             'L' => {
                 const lvl_str, const is_done = if (index < s.len - 1)
                     .{ s[index + 1 ..], true }
@@ -76,7 +76,7 @@ fn handleShortArg(s: []const u8, it: *ArgIter) !void {
                         std.log.err("Missing value of '{c}'", .{arg});
                         return Error.ExitFailure;
                     }, false };
-                filter.level = std.fmt.parseInt(
+                control.max_level = std.fmt.parseInt(
                     u16,
                     lvl_str,
                     10,

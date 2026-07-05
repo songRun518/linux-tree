@@ -1,134 +1,183 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
+const Dir = Io.Dir;
 const File = Io.File;
-const path = Io.Dir.path;
-const findScalarPos = std.mem.findScalarPos;
-const tokenizeScalar = std.mem.tokenizeScalar;
-const StringHashMap = std.StringHashMap;
+const eql = std.mem.eql;
 
-const root = @import("main.zig");
-const Info = root.Info;
-const filter = root.filter;
+const control = @import("main.zig").control;
+const detail = @import("detail.zig");
+const output = @import("output.zig");
 
-const black = "30";
-const red = "31";
-const green = "32";
-const yellow = "33";
-const blue = "34";
-const magenta = "35";
-const cyan = "36";
-const white = "37";
-const bright_black = "90";
-const bright_red = "91";
-const bright_green = "92";
-const bright_yellow = "93";
-const bright_blue = "94";
-const bright_magenta = "95";
-const bright_cyan = "96";
-const bright_white = "97";
+pub const block_device_style = "\x1b[33m";
+pub const character_device_style = "\x1b[33m";
+pub const directory_style = "\x1b[1;34m";
+pub const named_pipe_style = "\x1b[33m";
+pub const unix_domain_socket_style = "\x1b[35m";
+pub const door_style = "\x1b[35m";
+pub const sym_link_style = "\x1b[36m";
+pub const bad_link_style = "\x1b[31m";
+pub const reset_style = "\x1b[0m";
+pub const error_style = "\x1b[1;33m";
 
-const bold = "1";
-const dim = "2";
-const reset_c = "0";
-
-fn compose(comptime effect: []const u8, comptime color: []const u8) []const u8 {
-    comptime return effect ++ ";" ++ color;
+/// Assert `kind` is not file and sym_link.
+fn getSimpleKind(kind: File.Kind) []const u8 {
+    return if (control.no_color) reset_style else switch (kind) {
+        .block_device => block_device_style,
+        .character_device => character_device_style,
+        .directory => directory_style,
+        .named_pipe => named_pipe_style,
+        .unix_domain_socket => unix_domain_socket_style,
+        .door => door_style,
+        else => reset_style, //.event_port .whiteout .unknown
+        .sym_link, .file => unreachable,
+    };
 }
 
-var color_map: StringHashMap([]const u8) = undefined;
+const media_style = "\x1b[1;35m";
+const archive_style = "\x1b[1;35m";
+const executable_style = "\x1b[1;32m";
 
-const media_ext = [_][]const u8{
+const media_extensions = [_][]const u8{
     ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".ico",  ".tiff",
     ".mp3", ".wav", ".flac", ".ogg", ".m4a",  ".aac", ".mid", ".wma",  ".mp4",
     ".mkv", ".mov", ".webm", ".avi", ".wmv",  ".flv", ".mpg", ".mpeg",
 };
-
-const archive_ext = [_][]const u8{
+const archive_extensions = [_][]const u8{
     ".7z", ".xz", ".zip", ".tar", ".gz", ".bz2", ".rar", ".iso", ".lzma", ".cab",
 };
 
-pub fn init(gpa: Allocator) !void {
-    color_map = .init(gpa);
-    errdefer color_map.deinit();
+fn getTreeFile(io: Io, dir: Dir, entry: Dir.Entry) []const u8 {
+    if (control.no_color) return reset_style;
 
-    for (media_ext) |e| {
-        try color_map.put(
-            e,
-            comptime compose(bold, magenta),
-        );
+    const is_executale = check_exe: {
+        const stat = dir.statFile(
+            io,
+            entry.name,
+            .{ .follow_symlinks = false },
+        ) catch break :check_exe false;
+        const perm = @intFromEnum(stat.permissions);
+        break :check_exe perm & 0o0111 != 0;
+    };
+    if (is_executale) return executable_style;
+
+    const f_ext = Dir.path.extension(entry.name);
+    for (media_extensions) |ext| {
+        if (eql(u8, f_ext, ext)) return media_style;
     }
-    for (archive_ext) |e| {
-        try color_map.put(
-            e,
-            comptime compose(bold, yellow),
-        );
+    for (archive_extensions) |ext| {
+        if (eql(u8, f_ext, ext)) return archive_style;
     }
+
+    return reset_style;
 }
 
-pub fn deinit() void {
-    color_map.deinit();
-}
+/// Returns null if it's bad link.
+fn getTargetFile(io: Io, dir: Dir, entry: Dir.Entry) ?[]const u8 {
+    if (control.no_color) return reset_style;
 
-pub const Option = struct {
-    name: []const u8,
-    kind: File.Kind,
-    is_executable: bool,
-    is_bad_link: bool,
-
-    pub fn fromInfo(i: Info) @This() {
-        return .{
-            .name = i.name,
-            .kind = i.kind,
-            .is_executable = i.is_executable,
-            .is_bad_link = i.is_bad_link,
+    const is_executale = check_exe: {
+        const stat = dir.statFile(
+            io,
+            entry.name,
+            .{ .follow_symlinks = true },
+        ) catch |err| switch (err) {
+            error.FileNotFound => return null, // bad link
+            else => break :check_exe false,
         };
+        const perm = @intFromEnum(stat.permissions);
+        break :check_exe perm & 0o0111 != 0;
+    };
+    if (is_executale) return executable_style;
+
+    const f_ext = Dir.path.extension(entry.name);
+    for (media_extensions) |ext| {
+        if (eql(u8, f_ext, ext)) return media_style;
     }
-};
+    for (archive_extensions) |ext| {
+        if (eql(u8, f_ext, ext)) return archive_style;
+    }
 
-pub fn get(opt: Option) ![]const u8 {
-    return switch (opt.kind) {
-        .block_device => yellow,
-        .character_device => yellow,
-        .directory => comptime compose(bold, blue),
-        .named_pipe => yellow,
-        .unix_domain_socket => magenta,
-        .door => magenta,
-        .sym_link => if (opt.is_bad_link) red else comptime compose(
-            bold,
-            cyan,
-        ),
-        .file => f: {
-            if (opt.is_executable) break :f comptime compose(bold, green);
-
-            break :f color_map.get(path.extension(opt.name)) orelse reset_c;
-        },
-        else => reset_c, //.event_port .whiteout .unknown
-    };
+    return reset_style;
 }
 
-pub fn set(w: *Io.Writer, opt: Option) !void {
-    if (filter.no_color) return;
+var read_link_buffer: [Dir.max_path_bytes]u8 = undefined;
 
-    try w.print("\x1b[{s}m", .{try get(opt)});
+pub fn printDetails(io: Io, dir: Dir, entry: Dir.Entry) void {
+    if (entry.kind != .sym_link) {
+        const style = switch (entry.kind) {
+            .file => getTreeFile(io, dir, entry),
+            .sym_link => unreachable,
+            else => getSimpleKind(entry.kind),
+        };
+        output.print("{s}{s}{s}\n", .{ style, entry.name, reset_style });
+        return;
+    }
+
+    const target = dir.readLink(io, entry.name, &read_link_buffer);
+    if (target) |read_len| {
+        const path = read_link_buffer[0..read_len];
+        if (getTargetFile(io, dir, entry)) |style| {
+            const prefix = Dir.path.dirname(path);
+            const basename = Dir.path.basename(path);
+            output.print("{s}{s}{s} -> ", .{ sym_link_style, entry.name, reset_style });
+            if (prefix) |pfx| {
+                const dir_style = getSimpleKind(.directory);
+                output.print("{s}{s}", .{ dir_style, pfx });
+                if (pfx[pfx.len - 1] != '/') output.printAsciiChar('/', .{});
+            }
+            output.print("{s}{s}{s}\n", .{ style, basename, reset_style });
+        } else {
+            output.print("{s}{s}{s} -> {s}\n", .{ bad_link_style, entry.name, reset_style, path });
+        }
+    } else |err| {
+        output.print("{s}{s}{s} -> {s}error:{s} {t}", .{
+            sym_link_style,
+            entry.name,
+            reset_style,
+            error_style,
+            reset_style,
+            err,
+        });
+    }
 }
 
-/// Assume `kind` is not sym_link or file.
-pub fn setByKind(w: *Io.Writer, kind: File.Kind) !void {
-    if (filter.no_color) return;
-
-    const opt: Option = .{
-        .kind = kind,
-
-        .name = "",
-        .is_executable = false,
-        .is_bad_link = false,
-    };
-    try w.print("\x1b[{s}m", .{try get(opt)});
+/// Assume called after updating `detail`.
+///
+/// Returns .{ orginal_color, target_color(symlink) }.
+pub fn get(entry: Dir.Entry) struct { []const u8, ?[]const u8 } {
+    if (entry.kind == .sym_link) {} else return .{ getNotSymLink(entry), null };
 }
 
-pub fn reset(w: *Io.Writer) !void {
-    if (filter.no_color) return;
+fn getSymlink() struct { []const u8, ?[]const u8 } {}
 
-    try w.writeAll("\x1b[0m");
+fn getNotSymLink(entry: Dir.Entry) []const u8 {
+    if (control.no_color) return reset_style;
+
+    switch (entry.kind) {
+        .file => getFile(entry.name),
+        .sym_link => unreachable,
+
+        .block_device => block_device_style,
+        .character_device => character_device_style,
+        .directory => directory_style,
+        .named_pipe => named_pipe_style,
+        .unix_domain_socket => unix_domain_socket_style,
+        .door => door_style,
+        else => reset_style, //.event_port .whiteout .unknown
+    }
+}
+
+fn getFile(name: []const u8) []const u8 {
+    if (detail.is_executable) return executable_style;
+
+    const f_ext = Dir.path.extension(name);
+    for (media_extensions) |ext| {
+        if (eql(u8, f_ext, ext)) return media_style;
+    }
+    for (archive_extensions) |ext| {
+        if (eql(u8, f_ext, ext)) return archive_style;
+    }
+
+    return reset_style;
 }
