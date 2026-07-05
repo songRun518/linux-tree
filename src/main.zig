@@ -136,7 +136,7 @@ fn printDetail(io: Io, dir: Dir, entry: Dir.Entry) void {
                 const basename = Dir.path.basename(t.path);
                 output.print("{s}{s}{s}\n", .{
                     c: {
-                        if (t.is_executable) break :c color.executable_style;
+                        if (t.is_executable and t.kind.? == .file) break :c color.executable_style;
                         break :c if (t.kind) |k| color.getNotSymLink(.{
                             .name = basename,
                             .kind = k,
