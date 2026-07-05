@@ -23,7 +23,8 @@ pub const Target = struct {
 
 pub fn update(io: Io, dir: Dir, entry: Dir.Entry) void {
     setDefault();
-    const original_stat = if (control.show_size) statSize(io, dir, entry) else null;
+    if (entry.kind != .file and entry.kind != .sym_link) return;
+    const original_stat = statSize(io, dir, entry);
     if (entry.kind == .file) updateExecutable(original_stat) //
     else if (entry.kind == .sym_link) updateSymLink(io, dir, entry);
 }
@@ -46,7 +47,7 @@ fn statSize(io: Io, dir: Dir, entry: Dir.Entry) ?File.Stat {
     return stat;
 }
 
-const check_exe_mask = 0o111;
+const check_exe_mask = 0o100;
 
 fn updateExecutable(__stat: ?File.Stat) void {
     if (control.no_color) return;

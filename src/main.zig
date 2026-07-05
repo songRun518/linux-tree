@@ -6,6 +6,7 @@ const File = Io.File;
 const path = Dir.path;
 
 const cli = @import("cli.zig");
+const color = @import("color.zig");
 const detail = @import("detail.zig");
 const DirIter = @import("DirIter.zig");
 const fatal_fn = @import("fatal_fn.zig");
@@ -14,7 +15,7 @@ const output = @import("output.zig");
 pub const control = struct {
     pub var list_all = false;
     pub var max_level: ?u16 = null;
-    pub var no_color: bool = true;
+    pub var no_color: bool = false;
     pub var show_size: bool = false;
 };
 
@@ -48,7 +49,7 @@ pub fn main(init: std.process.Init) !u8 {
         };
         defer dir.close(io);
 
-        output.print("{s}\n", .{dir_path});
+        output.print("{s}{s}{s}\n", .{ color.directory_style, dir_path, color.reset_style });
 
         try makeTree(gpa, io, dir, 1);
     }
@@ -121,16 +122,40 @@ fn printDetail(io: Io, dir: Dir, entry: Dir.Entry) void {
     detail.update(io, dir, entry);
     if (control.show_size) output.print("[{s}] ", .{byteToHuman(detail.size)});
     if (entry.kind == .sym_link) {
-        output.print("{s} -> ", .{entry.name});
+        output.print("{s}{s}{s} -> ", .{
+            if (detail.is_bad_link) color.bad_link_style else color.symlink_style,
+            entry.name,
+            color.reset_style,
+        });
         if (detail.target) |te| {
             if (te) |t| {
-                output.print("{s}\n", .{t.path});
+                const prefix_null = Dir.path.dirname(t.path);
+                if (prefix_null) |pfx| {
+                    output.print("{s}{s}/{s}", .{ color.directory_style, pfx, color.reset_style });
+                }
+                const basename = Dir.path.basename(t.path);
+                output.print("{s}{s}{s}\n", .{
+                    c: {
+                        if (t.is_executable) break :c color.executable_style;
+                        break :c if (t.kind) |k| color.getNotSymLink(.{
+                            .name = basename,
+                            .kind = k,
+                            .inode = 0,
+                        }) else "";
+                    },
+                    basename,
+                    color.reset_style,
+                });
             } else |err| {
-                output.print("error: {t}", .{err});
+                output.print("{s}error:{s} {t}", .{ color.error_style, color.reset_style, err });
             }
         }
     } else {
-        output.print("{s}\n", .{entry.name});
+        output.print("{s}{s}{s}\n", .{
+            color.getNotSymLink(entry),
+            entry.name,
+            color.reset_style,
+        });
     }
 }
 
