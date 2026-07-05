@@ -47,7 +47,7 @@ fn statSize(io: Io, dir: Dir, entry: Dir.Entry) ?File.Stat {
     return stat;
 }
 
-const check_exe_mask = 0o100;
+const check_exe_mask = 0o111;
 
 fn updateExecutable(__stat: ?File.Stat) void {
     if (control.no_color) return;
