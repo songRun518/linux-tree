@@ -119,7 +119,7 @@ fn printLastError(err: anyerror, level: usize) void {
 
 fn printDetail(io: Io, dir: Dir, entry: Dir.Entry) void {
     detail.update(io, dir, entry);
-    if (control.show_size) output.print("[{d}] ", .{detail.size});
+    if (control.show_size) output.print("[{s}] ", .{byteToHuman(detail.size)});
     if (entry.kind == .sym_link) {
         output.print("{s} -> ", .{entry.name});
         if (detail.target) |te| {
@@ -132,4 +132,34 @@ fn printDetail(io: Io, dir: Dir, entry: Dir.Entry) void {
     } else {
         output.print("{s}\n", .{entry.name});
     }
+}
+
+var str_buf: [20]u8 = undefined;
+fn byteToHuman(b_in_int: u64) []const u8 {
+    const b: f64 = @floatFromInt(b_in_int);
+    const kb = b / 1024;
+    const mb = kb / 1024;
+    const gb = mb / 1024;
+
+    var size_unit: []const u8 = "";
+    var value: f64 = 0;
+
+    if (gb >= 1) {
+        size_unit = "G";
+        value = gb;
+    } else if (mb >= 1) {
+        size_unit = "M";
+        value = mb;
+    } else if (kb >= 1) {
+        size_unit = "K";
+        value = kb;
+    } else {
+        size_unit = "B";
+        value = b;
+    }
+
+    return std.fmt.bufPrint(&str_buf, "{d:.1}{s}", .{ value, size_unit }) catch {
+        @branchHint(.cold);
+        unreachable;
+    };
 }
