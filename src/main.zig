@@ -49,7 +49,7 @@ pub fn main(init: std.process.Init) !u8 {
         };
         defer dir.close(io);
 
-        output.print("{s}{s}{s}\n", .{ color.directory_style, dir_path, color.reset_style });
+        output.print("{s}{s}{s}\n", .{ color.getSimpleKind(.directory), dir_path, color.reset_style });
 
         try makeTree(gpa, io, dir, 1);
     }
