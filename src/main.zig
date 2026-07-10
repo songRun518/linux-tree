@@ -49,7 +49,7 @@ pub fn main(init: std.process.Init) !u8 {
         };
         defer dir.close(io);
 
-        output.print("{s}{s}{s}\n", .{ color.getSimpleKind(.directory), dir_path, color.reset_style });
+        output.print("{s}{s}{s}\n", .{ color.getSimple(.directory), dir_path, color.getReset() });
 
         try makeTree(gpa, io, dir, 1);
     }
@@ -115,46 +115,36 @@ fn printLastError(err: anyerror, level: usize) void {
     }
     // Prints four width.
     output.print("{u}── ", .{@as(u21, '└')});
-    output.print("error: {t}\n", .{err});
+    output.print(" {s}error:{s} {t}\n", .{ color.getError(), color.getReset(), err });
 }
 
 fn printDetail(io: Io, dir: Dir, entry: Dir.Entry) void {
     detail.update(io, dir, entry);
-    if (control.show_size) output.print("[{s}] ", .{byteToHuman(detail.size)});
+    if (control.show_size) output.print("[{s}] ", .{byteToHuman(detail.size())});
     if (entry.kind == .sym_link) {
         output.print("{s}{s}{s} -> ", .{
-            if (detail.is_bad_link) color.bad_link_style else color.symlink_style,
+            color.getSimple(.sym_link),
             entry.name,
-            color.reset_style,
+            color.getReset(),
         });
-        if (detail.target) |te| {
-            if (te) |t| {
-                const prefix_null = Dir.path.dirname(t.path);
-                if (prefix_null) |pfx| {
-                    output.print("{s}{s}/{s}", .{ color.directory_style, pfx, color.reset_style });
-                }
-                const basename = Dir.path.basename(t.path);
-                output.print("{s}{s}{s}\n", .{
-                    c: {
-                        if (t.is_executable and t.kind.? == .file) break :c color.executable_style;
-                        break :c if (t.kind) |k| color.getNotSymLink(.{
-                            .name = basename,
-                            .kind = k,
-                            .inode = 0,
-                        }) else "";
-                    },
-                    basename,
-                    color.reset_style,
-                });
-            } else |err| {
-                output.print("{s}error:{s} {t}", .{ color.error_style, color.reset_style, err });
+        if (detail.target_path.?) |p| {
+            if (Dir.path.dirname(p)) |prefix| {
+                output.print("{s}{s}/{s}", .{ color.getTargetPrefix(), prefix, color.getReset() });
             }
+            const basename = Dir.path.basename(p);
+            output.print("{s}{s}{s}\n", .{
+                color.getTarget(),
+                basename,
+                color.getReset(),
+            });
+        } else |err| {
+            output.print("{s}error:{s} {t}", .{ color.getError(), color.getReset(), err });
         }
     } else {
         output.print("{s}{s}{s}\n", .{
-            color.getNotSymLink(entry),
+            color.get(entry),
             entry.name,
-            color.reset_style,
+            color.getReset(),
         });
     }
 }

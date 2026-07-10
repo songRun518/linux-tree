@@ -6,81 +6,105 @@ const File = Io.File;
 
 const control = @import("main.zig").control;
 
-pub var size: u64 = 0;
-/// Only analysed as it's file.
-pub var is_executable: bool = false;
-pub var is_bad_link: bool = false;
-/// Exists if it isn't bad link.
-pub var target: ?Dir.ReadLinkError!Target = null;
-
-/// Symlink's target infomation.
-pub const Target = struct {
-    path: []const u8,
-    /// Exists if stat successfully.
-    kind: ?File.Kind,
-    is_executable: bool,
-};
-
-pub fn update(io: Io, dir: Dir, entry: Dir.Entry) void {
-    setDefault();
-    if (entry.kind != .file and entry.kind != .sym_link) return;
-    const original_stat = statSize(io, dir, entry);
-    if (entry.kind == .file) updateExecutable(original_stat) //
-    else if (entry.kind == .sym_link) updateSymLink(io, dir, entry);
-}
-
-fn setDefault() void {
-    size = 0;
-    is_executable = false;
-    is_bad_link = false;
-    target = null;
-}
-
-/// Returns stat not following the symlink.
-fn statSize(io: Io, dir: Dir, entry: Dir.Entry) ?File.Stat {
-    const stat = dir.statFile(
-        io,
-        entry.name,
-        .{ .follow_symlinks = false },
-    ) catch return null;
-    size = stat.size;
-    return stat;
-}
-
-const check_exe_mask = 0o111;
-
-fn updateExecutable(__stat: ?File.Stat) void {
-    if (control.no_color) return;
-
-    const stat = __stat orelse return;
-    const perm = @intFromEnum(stat.permissions);
-    is_executable = (perm & check_exe_mask) != 0;
-}
+/// Seen as the normal if it is null.
+var origin_stat: ?File.Stat = null;
+/// It is not a symlink if is is null.
+///
+/// Always exists if it is symlink.
+pub var target_path: ?Dir.ReadLinkError![]const u8 = null;
+/// It is not a symlink if is is null.
+///
+/// Always exists if it is symlink.
+var target_stat: ?Dir.StatFileError!File.Stat = null;
 
 var read_link_buffer: [Dir.max_path_bytes]u8 = undefined;
 
-fn updateSymLink(io: Io, dir: Dir, entry: Dir.Entry) void {
-    const read_len = dir.readLink(io, entry.name, &read_link_buffer) catch |err| {
-        target = err;
-        return;
-    };
+pub fn update(io: Io, dir: Dir, entry: Dir.Entry) void {
+    setDefault();
 
-    var __target = Target{
-        .path = read_link_buffer[0..read_len],
-        .kind = null,
-        .is_executable = false,
-    };
-    defer target = __target;
+    if (dir.statFile(
+        io,
+        entry.name,
+        .{ .follow_symlinks = false },
+    )) |o_s| {
+        origin_stat = o_s;
+    } else |_| {}
 
-    const target_stat = dir.statFile(
+    if (entry.kind != .sym_link) return;
+    target_path = rl: {
+        const len = dir.readLink(
+            io,
+            entry.name,
+            &read_link_buffer,
+        ) catch |err| break :rl err;
+        break :rl read_link_buffer[0..len];
+    };
+    target_stat = dir.statFile(
         io,
         entry.name,
         .{ .follow_symlinks = true },
-    ) catch |err| {
-        if (err == error.FileNotFound) is_bad_link = true;
-        return;
-    };
-    __target.kind = target_stat.kind;
-    const perm = @intFromEnum(target_stat.permissions);
-    __target.is_executable = (perm & check_exe_mask) != 0;
+    );
+}
+
+fn setDefault() void {
+    origin_stat = null;
+    target_path = null;
+    target_stat = null;
+}
+
+const exe_mask_code = 0o111;
+
+/// Returns zero if `origin_stat` is null.
+pub fn size() u64 {
+    return if (origin_stat) |o_s| o_s.size else 0;
+}
+
+/// Returns `.file` if `origin_stat` is null.
+pub fn originKind() File.Kind {
+    return if (origin_stat) |o_s|
+        o_s.kind
+    else
+        .file;
+}
+
+/// Returns `.file` if `target_stat` is null or error.
+pub fn targetKind() File.Kind {
+    return if (target_stat) |t_s_e|
+        if (t_s_e) |t_s|
+            t_s.kind
+        else |_|
+            .file
+    else
+        .file;
+}
+
+/// Checks it is a file and executable.
+///
+/// Returns **false** if `origin_stat` is null.
+pub fn isOriginExecutable() bool {
+    return if (origin_stat) |o_s|
+        o_s.kind == .file and (@intFromEnum(o_s.permissions) & exe_mask_code) != 0
+    else
+        false;
+}
+
+/// Checks it is a file and executable.
+///
+/// Returns **false** if `target_stat` is null or error.
+pub fn isTargetExecutable() bool {
+    return if (target_stat) |t_s_e|
+        if (t_s_e) |t_s|
+            t_s.kind == .file and (@intFromEnum(t_s.permissions) & exe_mask_code) != 0
+        else |_|
+            false
+    else
+        false;
+}
+
+/// Only when `error.FileNotFound` occurred does it return true.
+pub fn isBadLink() bool {
+    if (target_path == null) return false;
+    return if (target_stat) |t_s| t_s: {
+        break :t_s t_s == error.FileNotFound;
+    } else false;
 }
