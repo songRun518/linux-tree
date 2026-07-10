@@ -67,7 +67,10 @@ fn handleLongArg(s: []const u8) Error!void {
 fn handleShortArg(s: []const u8, it: *ArgIter) !void {
     for (s, 0..) |arg, index| {
         switch (arg) {
-            'h' => return Error.ExitSuccess,
+            'h' => {
+                output.print("{s}\n", .{help_message});
+                return Error.ExitSuccess;
+            },
             's' => control.show_size = true,
             'a' => control.list_all = true,
             'L' => {
