@@ -173,7 +173,7 @@ fn byteToHuman(b_in_int: u64) []const u8 {
         value = b;
     }
 
-    return std.fmt.bufPrint(&str_buf, "{d:.1}{s}", .{ value, size_unit }) catch {
+    return std.fmt.bufPrint(&str_buf, "{d:.1} {s}", .{ value, size_unit }) catch {
         @branchHint(.cold);
         unreachable;
     };
