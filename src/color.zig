@@ -17,7 +17,7 @@ pub const unix_domain_socket_style = "\x1b[1;35m";
 pub const door_style = "\x1b[1;36m";
 pub const symlink_style = "\x1b[36m";
 
-pub const bad_link_style = "\x1b[31m";
+pub const bad_link_style = "\x1b[4;31m";
 pub const reset_style = "\x1b[0m";
 pub const error_style = "\x1b[1;33m";
 pub const executable_style = "\x1b[1;32m";
