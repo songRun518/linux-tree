@@ -10,7 +10,7 @@ const color = @import("color.zig");
 const detail = @import("detail.zig");
 const DirIter = @import("DirIter.zig");
 const fatal_fn = @import("fatal_fn.zig");
-const output = @import("output.zig");
+const stdout = @import("stdout.zig");
 
 pub const control = struct {
     pub var list_all = false;
@@ -25,8 +25,8 @@ pub fn main(init: std.process.Init) !u8 {
     const gpa = init.gpa;
     const io = init.io;
 
-    output.init(io);
-    defer output.deinit();
+    stdout.init(io);
+    defer stdout.deinit();
 
     const dir_paths = cli.handleCli(
         gpa,
@@ -49,7 +49,7 @@ pub fn main(init: std.process.Init) !u8 {
         };
         defer dir.close(io);
 
-        output.print("{s}{s}{s}\n", .{ color.getSimple(.directory), dir_path, color.getReset() });
+        stdout.print("{s}{s}{s}\n", .{ color.getSimple(.directory), dir_path, color.getReset() });
 
         try makeTree(gpa, io, dir, 1);
     }
@@ -80,10 +80,10 @@ fn makeTree(
 
         for (0..level - 1) |i| {
             // Prints one branch and three space.
-            output.print("{u}   ", .{prev_branch_buffer[i]});
+            stdout.print("{u}   ", .{prev_branch_buffer[i]});
         }
         // Prints four width.
-        output.print("{u}── ", .{@as(u21, if (is_last) '└' else '├')});
+        stdout.print("{u}── ", .{@as(u21, if (is_last) '└' else '├')});
         // Prints details by file kind.
         printDetail(io, dir, entry);
 
@@ -111,37 +111,37 @@ fn makeTree(
 fn printLastError(err: anyerror, level: usize) void {
     for (0..level - 1) |i| {
         // Prints one branch and three space.
-        output.print("{u}   ", .{prev_branch_buffer[i]});
+        stdout.print("{u}   ", .{prev_branch_buffer[i]});
     }
     // Prints four width.
-    output.print("{u}── ", .{@as(u21, '└')});
-    output.print(" {s}error:{s} {t}\n", .{ color.getError(), color.getReset(), err });
+    stdout.print("{u}── ", .{@as(u21, '└')});
+    stdout.print(" {s}error:{s} {t}\n", .{ color.getError(), color.getReset(), err });
 }
 
 fn printDetail(io: Io, dir: Dir, entry: Dir.Entry) void {
     detail.update(io, dir, entry);
-    if (control.show_size) output.print("[{s}] ", .{byteToHuman(detail.size())});
+    if (control.show_size) stdout.print("[{s}] ", .{byteToHuman(detail.size())});
     if (entry.kind == .sym_link) {
-        output.print("{s}{s}{s} -> ", .{
+        stdout.print("{s}{s}{s} -> ", .{
             color.getSimple(.sym_link),
             entry.name,
             color.getReset(),
         });
         if (detail.target_path.?) |p| {
             if (Dir.path.dirname(p)) |prefix| {
-                output.print("{s}{s}/{s}", .{ color.getTargetPrefix(), prefix, color.getReset() });
+                stdout.print("{s}{s}/{s}", .{ color.getTargetPrefix(), prefix, color.getReset() });
             }
             const basename = Dir.path.basename(p);
-            output.print("{s}{s}{s}\n", .{
+            stdout.print("{s}{s}{s}\n", .{
                 color.getTarget(),
                 basename,
                 color.getReset(),
             });
         } else |err| {
-            output.print("{s}error:{s} {t}", .{ color.getError(), color.getReset(), err });
+            stdout.print("{s}error:{s} {t}", .{ color.getError(), color.getReset(), err });
         }
     } else {
-        output.print("{s}{s}{s}\n", .{
+        stdout.print("{s}{s}{s}\n", .{
             color.get(entry),
             entry.name,
             color.getReset(),
