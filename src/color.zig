@@ -7,7 +7,7 @@ const eql = std.mem.eql;
 
 const control = @import("main.zig").control;
 const detail = @import("detail.zig");
-const output = @import("output.zig");
+const stdout = @import("stdout.zig");
 
 const block_device_style = "\x1b[1;33m";
 const character_device_style = "\x1b[1;33m";
@@ -70,6 +70,7 @@ pub inline fn getTarget() [:0]const u8 {
 /// Treats file as the normal(reset style).
 pub inline fn getSimple(kind: File.Kind) [:0]const u8 {
     if (control.no_color) return "";
+
     return switch (kind) {
         .block_device => block_device_style,
         .character_device => character_device_style,

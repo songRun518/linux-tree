@@ -25,8 +25,8 @@ pub fn main(init: std.process.Init) !u8 {
     const gpa = init.gpa;
     const io = init.io;
 
-    stdout.init(io);
-    defer stdout.deinit();
+    stdout.init(io, init.environ_map);
+    defer stdout.flush();
 
     const dir_paths = cli.handleCli(
         gpa,
@@ -37,6 +37,7 @@ pub fn main(init: std.process.Init) !u8 {
         cli.Error.OutOfMemory => fatal_fn.outOfMemery(),
     };
     defer gpa.free(dir_paths);
+    if (!stdout.is_style_supported) control.no_color = true;
 
     for (dir_paths) |dir_path| {
         const dir = Dir.cwd().openDir(

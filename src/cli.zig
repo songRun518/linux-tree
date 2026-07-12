@@ -6,7 +6,7 @@ const Io = std.Io;
 const ArgIter = std.process.Args.Iterator;
 
 const control = @import("main.zig").control;
-const output = @import("output.zig");
+const stdout = @import("stdout.zig");
 
 pub const Error = error{
     ExitSuccess,
@@ -53,7 +53,7 @@ pub fn handleCli(gpa: Allocator, args: std.process.Args) Error![]const [:0]const
 /// The `s` does not contain "--".
 fn handleLongArg(s: []const u8) Error!void {
     if (eql(u8, s, "help")) {
-        output.print("{s}\n", .{help_message});
+        stdout.print("{s}\n", .{help_message});
         return Error.ExitSuccess;
     } else if (eql(u8, s, "no-color")) {
         control.no_color = true;
@@ -68,7 +68,7 @@ fn handleShortArg(s: []const u8, it: *ArgIter) !void {
     for (s, 0..) |arg, index| {
         switch (arg) {
             'h' => {
-                output.print("{s}\n", .{help_message});
+                stdout.print("{s}\n", .{help_message});
                 return Error.ExitSuccess;
             },
             's' => control.show_size = true,
