@@ -1,4 +1,5 @@
 const std = @import("std");
+const BufferFirstAllocator = std.heap.BufferFirstAllocator;
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
 const Dir = Io.Dir;
@@ -19,10 +20,12 @@ pub const control = struct {
     pub var show_size: bool = false;
 };
 
+var memory_buffer: [600 * 1024]u8 = undefined;
 var stdout_buffer: [8 * 1024]u8 = undefined;
 
 pub fn main(init: std.process.Init) !u8 {
-    const gpa = init.gpa;
+    var bfa: BufferFirstAllocator = .init(&memory_buffer, init.gpa);
+    const gpa = bfa.allocator();
     const io = init.io;
 
     stdout.init(io, init.environ_map);
