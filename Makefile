@@ -1,8 +1,8 @@
 dev:
-	zig build \
+	zig build
 
 release:
-	zig build -Doptimize=ReleaseFast \
+	zig build -Doptimize=ReleaseFast
 
 all: release dev
 
